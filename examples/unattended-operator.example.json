@@ -1,0 +1,25 @@
+{
+  "config": {
+    "developmentProjectConfirmed": false,
+    "projectId": "00000000-0000-4000-8000-000000000000",
+    "expectedWallet": "0x0000000000000000000000000000000000000000",
+    "payTo": "0x0000000000000000000000000000000000000000",
+    "merchantOrigin": "https://merchant.example",
+    "perCallAtomic": "5000000",
+    "totalAtomic": "10000000",
+    "durationMs": 3600000,
+    "policyId": "REPLACE_WITH_REVIEWED_TEST_POLICY_ID",
+    "merchantAccount": "acct_REPLACE_WITH_SANDBOX_ACCOUNT",
+    "fromBlock": "0",
+    "stateDir": "/absolute/private/testnet-state",
+    "orderDirectory": "/absolute/private/testnet-orders",
+    "onboardingOrigin": "http://127.0.0.1:4376",
+    "enrollmentPort": 4377
+  },
+  "credentials": {
+    "apiKeyId": "",
+    "apiKeySecret": "",
+    "walletSecret": "",
+    "stripeTestKey": ""
+  }
+}

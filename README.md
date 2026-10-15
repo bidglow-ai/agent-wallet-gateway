@@ -20,7 +20,10 @@ cannot enable mainnet through a flag. Read [the architecture and acceptance gate
 
 The [separate email onboarding example](examples/email-onboarding/README.md)
 lets self-hosting developers configure their own public development project and
-their users' own emails. It does not enroll users into a live payment broker.
+their users' own emails. A separately launched local development backend now
+verifies provider sessions and enrolls one immutable bounded testnet mandate.
+See [development-only operator setup](DEVELOPMENT_SETUP.md); this is not a hosted
+multi-tenant service, accepted provider flow or funded-wallet release.
 No actual email/delegation-provider acceptance is claimed by mocked tests or
 its successful build. It has separately documented dependency advisories.
 

@@ -7,33 +7,36 @@ const address='0x'+'1'.repeat(40),second='0x'+'2'.repeat(40);
 const publicConfig={projectId:'11111111-1111-4111-8111-111111111111',developmentConfirmed:true};
 function fixture(options={}){
   const calls=[];let user=options.preAuthenticated?{userId:'fixture-subject',evmAccountObjects:[{address},{address:second}]}:null;
+  let authListener;
   let delegation=options.delegation;
   const sdk={
     initialize:async config=>{calls.push(['initialize',config]);},
     getCurrentUser:async()=>user,
+    getAccessToken:async()=>{calls.push(['getAccessToken']);return 'synthetic-session';},
+    onAuthStateChange:listener=>{authListener=listener;},
     signInWithEmail:async input=>{calls.push(['signInWithEmail',input]);return {flowId:'private-fixture-flow'};},
     verifyEmailOTP:async input=>{calls.push(['verifyEmailOTP',input]);if(options.verifyFails)throw Error('private OTP must not escape');user={userId:'fixture-subject',evmAccountObjects:[{address},{address:second}]};return {user};},
-    getDelegationForAccount:async input=>{calls.push(['getDelegationForAccount',input]);if(options.readFails)throw {statusCode:503,errorType:'not_found',errorMessage:'private provider content'};if(!delegation)throw {statusCode:404,errorType:'delegation_not_found'};return delegation;},
+    getDelegationForAccount:async input=>{calls.push(['getDelegationForAccount',input]);await options.readGate;if(options.readFails)throw {statusCode:503,errorType:'not_found',errorMessage:'private provider content'};if(!delegation)throw {statusCode:404,errorType:'delegation_not_found'};return delegation;},
     createDelegationForAccount:async input=>{calls.push(['createDelegationForAccount',input]);await options.createGate;if(options.createFails)throw Error('private provider content');delegation={expiresAt:options.returnedExpiry||input.expiresAt};return delegation;},
-    revokeDelegationForAccount:async input=>{calls.push(['revokeDelegationForAccount',input]);if(options.revokeFails)throw Error('private provider content');delegation=undefined;},
+    revokeDelegationForAccount:async input=>{calls.push(['revokeDelegationForAccount',input]);await options.revokeGate;if(options.revokeFails)throw Error('private provider content');delegation=undefined;},
     signOut:async()=>{calls.push(['signOut']);user=null;},
   };
-  const controller=new OnboardingController(sdk,options.config||publicConfig,options.url||'http://127.0.0.1:5173');
-  return {controller,calls,setUser:value=>{user=value;}};
+  const controller=new OnboardingController(sdk,options.config||publicConfig,options.url||'http://127.0.0.1:4376');
+  return {controller,calls,setUser:value=>{user=value;},notifyUser:value=>{user=value;authListener?.(value);}};
 }
 async function signIn(f){await f.controller.initialize();await f.controller.sendCode('person@fixture.invalid');await f.controller.verifyCode('fixture-code');}
 test('blank or unconfirmed project and non-loopback origins fail before any SDK initialization',async()=>{
   for(const config of [{...publicConfig,projectId:''},{...publicConfig,developmentConfirmed:false},{...publicConfig,developmentConfirmed:'true'},{...publicConfig,secret:'forbidden'}]){
     const f=fixture({config});await assert.rejects(f.controller.initialize(),/DEVELOPMENT_PROJECT_REQUIRED/);assert.equal(f.calls.length,0);
   }
-  for(const url of ['https://production.example/','http://192.168.1.2:5173/','https://localhost:5173/'])assert.throws(()=>validateDevelopmentConfig(publicConfig,url),/LOOPBACK_DEVELOPMENT_ONLY/);
-  for(const url of ['http://localhost:5173/','http://127.0.0.1:5173/','http://[::1]:5173/'])assert.doesNotThrow(()=>validateDevelopmentConfig(publicConfig,url));
+  for(const url of ['https://production.example/','http://192.168.1.2:4376/','https://localhost:4376/','http://localhost:4376/','http://[::1]:4376/','http://127.0.0.1/'])assert.throws(()=>validateDevelopmentConfig(publicConfig,url),/LOOPBACK_DEVELOPMENT_ONLY/);
+  assert.doesNotThrow(()=>validateDevelopmentConfig(publicConfig,'http://127.0.0.1:4376/'));
 });
 test('sign-in uses official SDK functions; OTP/email stay out of public state and login grants nothing',async()=>{
   const f=fixture();await signIn(f);const state=f.controller.state();assert.equal(state.authenticated,true);assert.equal(state.selected,address);
   assert.equal(f.calls.filter(([method])=>method==='createDelegationForAccount').length,0);
   assert.deepEqual(f.calls[0],['initialize',{projectId:publicConfig.projectId,disableAnalytics:true,debugging:false,ethereum:{createOnLogin:'eoa'}}]);
-  assert.equal(state.fundingAccepted,false);assert.equal(state.paymentsEnabled,false);assert.equal(state.backendEnrollment,'not_implemented');
+  assert.equal(state.fundingAccepted,false);assert.equal(state.paymentsEnabled,false);assert.equal(state.backendEnrollment,'blocked');
   const serialized=JSON.stringify(state);for(const privateValue of ['person@fixture.invalid','fixture-code','private-fixture-flow','fixture-subject'])assert.ok(!serialized.includes(privateValue));
 });
 test('code verification needs an in-memory flow and provider errors are redacted',async()=>{
@@ -78,11 +81,28 @@ test('unexpected expiry and lost create response remain reviewable; revoke stays
     await f.controller.revokeDelegation();assert.equal(f.controller.state().delegation.status,'revoked');
   }
 });
-test('UI has explicit consent and honest project/payment warnings; no application telemetry or backend submission',()=>{
+test('late delegation read/create/revoke cannot update a different user or signed-out account',async()=>{
+  for(const [gateName,method,operation] of [
+    ['readGate','getDelegationForAccount',c=>c.refreshDelegation()],
+    ['createGate','createDelegationForAccount',c=>c.grantDelegation(1,true)],
+    ['revokeGate','revokeDelegationForAccount',c=>c.revokeDelegation()],
+  ])for(const nextUser of [null,{userId:'different-user',evmAccountObjects:[{address:second}]}]){
+    let release;const gate=new Promise(resolve=>{release=resolve;});const f=fixture({preAuthenticated:true,[gateName]:gate});
+    await f.controller.initialize();const pending=operation(f.controller);
+    for(let i=0;i<20&&!f.calls.some(([name])=>name===method);i++)await Promise.resolve();
+    assert.ok(f.calls.some(([name])=>name===method));
+    f.notifyUser(nextUser);release();await assert.rejects(pending,/AUTHENTICATED_ACCOUNT_CHANGED/);
+    assert.equal(f.controller.state().delegation.status,'unchecked');
+    assert.equal(f.controller.state().selected,nextUser?second:undefined);
+    assert.equal(f.controller.connection(),undefined);
+  }
+});
+test('UI has separate mandate consent and honest warnings; email/OTP forms never submit credentials',()=>{
   const root=new URL('../',import.meta.url),html=fs.readFileSync(new URL('index.html',root),'utf8'),main=fs.readFileSync(new URL('src/main.ts',root),'utf8');
   assert.match(html,/Testnet only/);assert.match(html,/Funding is not accepted/);assert.match(html,/another project, including AWAL, can have a different wallet/);
-  assert.match(html,/Backend enrollment and payment integration are not implemented/);assert.match(html,/not restricted to testnet, USDC, a recipient or a spending budget/);
+  assert.match(html,/No real provider or payment acceptance is established/);assert.match(html,/not restricted to testnet, USDC, a recipient or a spending budget/);
   assert.match(html,/id="consent" type="checkbox"/);assert.match(main,/createDelegationForAccount/);assert.match(main,/revokeDelegationForAccount/);
+  assert.match(html,/id="mandate-consent" type="checkbox"/);assert.match(html,/id="revoke-consent" type="checkbox"/);
   // Native fallback form submissions must carry neither email nor OTP if the
   // module is unavailable; SDK calls read these unnamed inputs in memory only.
   assert.doesNotMatch(html,/<input[^>]*name=/);

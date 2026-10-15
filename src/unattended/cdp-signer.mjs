@@ -38,7 +38,7 @@ export class CdpDelegatedSigner {
     if(!client||typeof policyId!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(policyId))throw new PaymentError('PROVIDER_CONFIGURATION_REQUIRED');
     this.#client=client;this.#policyId=policyId;
   }
-  async verifyEnrollment({accessToken,wallet}){
+  async verifySession({accessToken,wallet}){
     // Trusted HTTPS enrollment handler only, never an MCP tool. The subject
     // comes from Coinbase verification, not a client email/UUID/address claim.
     if(typeof accessToken!=='string'||accessToken.length<1||accessToken.length>16384||
@@ -46,15 +46,19 @@ export class CdpDelegatedSigner {
     try{
       const subject=await this.#client.endUser.validateAccessToken({accessToken});
       if(typeof subject?.userId!=='string')throw new PaymentError('AUTHENTICATED_ENROLLMENT_REQUIRED');
-      const [user,delegation]=await Promise.all([
-        this.#client.endUser.getEndUser({userId:subject.userId}),
-        this.#client.endUser.getDelegationForEndUserAccount({userId:subject.userId,address:wallet}),
-      ]);
+      const user=await this.#client.endUser.getEndUser({userId:subject.userId});
       const account=user?.evmAccountObjects?.find(a=>a.address?.toLowerCase()===wallet);
+      if(user?.userId!==subject.userId||!account||account.ejectedAt||account.exportedAt)throw new PaymentError('AUTHENTICATED_ENROLLMENT_REQUIRED');
+      return Object.freeze({userId:subject.userId,wallet});
+    }catch(error){if(error instanceof PaymentError)throw error;throw new PaymentError('AUTHENTICATED_ENROLLMENT_UNCONFIRMED');}
+  }
+  async verifyEnrollment(input){
+    const subject=await this.verifySession(input);
+    try{
+      const delegation=await this.#client.endUser.getDelegationForEndUserAccount({userId:subject.userId,address:subject.wallet});
       const expiresAt=Date.parse(delegation?.expiresAt),now=Date.now();
-      if(user?.userId!==subject.userId||!account||account.ejectedAt||account.exportedAt||
-        !Number.isSafeInteger(expiresAt)||expiresAt<=now||expiresAt>now+86400000)throw new PaymentError('AUTHENTICATED_ENROLLMENT_REQUIRED');
-      return Object.freeze({userId:subject.userId,wallet,delegationExpiresAt:expiresAt});
+      if(!Number.isSafeInteger(expiresAt)||expiresAt<=now||expiresAt>now+86400000)throw new PaymentError('AUTHENTICATED_ENROLLMENT_REQUIRED');
+      return Object.freeze({...subject,delegationExpiresAt:expiresAt});
     }catch(error){if(error instanceof PaymentError)throw error;throw new PaymentError('AUTHENTICATED_ENROLLMENT_UNCONFIRMED');}
   }
   async sign(order,grant,now=Date.now()){

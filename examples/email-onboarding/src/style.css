@@ -17,3 +17,4 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .check input { margin-top: 6px; }
 .footnote { font-size: .88rem; color: #bec8b6; }
 #status { padding: 16px; background: #1c2417; overflow-wrap: anywhere; }
+pre, textarea { box-sizing: border-box; width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; color: inherit; background: #161d12; border: 1px solid #6e7c60; border-radius: 6px; }

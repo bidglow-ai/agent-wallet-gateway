@@ -1,5 +1,47 @@
 # Acceptance evidence
 
+## Own-email enrollment milestone — October 15, NOT a funding release
+
+- Root syntax checks and **116/116 isolated tests** pass on Node 26.7.0 and
+  Node 24.13.0. Email example typecheck, **27/27 tests** and Vite 8.0.16 build pass.
+  These are local fixtures, not new provider authentication, testnet transfers,
+  vendor-native model payments or mainnet acceptance.
+- Implemented fixed project/wallet enrollment registry, fresh official-session
+  verification, one-use frozen proposal and separate one-time owner approval.
+  Browser/API callers cannot supply identity, grant ID, budget, merchant or path.
+  Re-login/restart preserves original mandate, expiry, reservations and revocation.
+  Pending initialization and a lost registry/payer ledger fail closed rather
+  than silently creating an empty spending allowance.
+- An actual local HTTP integration test enrolls through a **fixture** provider,
+  pays a frozen **fixture** order, restarts, and refuses duplicate payment. A
+  second **fixture** settlement loses its response; after local revocation,
+  restart and simulated expiry, a separately authenticated recovery-only
+  connection inspects/reconciles it without any new sign or settle call.
+- Recovery-only HTTP rejects pay before order lookup; the recovery broker is
+  constructed with forbidden sign/settle adapters and never initializes a
+  facilitator. It reuses the original ledger, not a new grant or renewed expiry.
+- Independent cross-review found and led to fixes for capability issuance racing
+  revocation and missing post-restart expired/revoked recovery access. Related
+  focused tests pass on both Node versions. Frontend review additionally fixed
+  late delegation responses being applied after account changes/sign-out.
+  This is scoped implementation review, not a whole-wallet security certification.
+- Root dependency audit: zero advisories. Email-example full/production-only
+  audits: **five moderate package entries remain** in official SDK transitives,
+  no high/critical. A compatible Vite patch removed its high development-tool
+  entry. No unsupported major override, SDK downgrade or audit suppression used.
+  See the example's dependency report; dependency gates are not all green.
+- Default `npm start` remains read-only. New operator bootstrap requires explicit
+  testnet acknowledgment and owner-only operator config outside the repository.
+  Agent adapters receive a scoped capability, never project/Stripe credentials.
+  No actual login, delegation, policy write, faucet request, new chain transfer,
+  production change, mainnet funding instruction or payment was performed.
+
+Remaining external gates: owner development-platform login/configuration, actual
+email/account delegation and provider-negative tests, a **new** provider-signed
+test-USDC transfer with independent chain/Stripe evidence, native clients,
+unresolved SDK advisories, safe incomplete-enrollment recovery/renewal and
+separately reviewed production accounting/security. Do not fund this milestone.
+
 ## Unattended development milestone — October 15, NOT a funding release
 
 - 92 root tests and syntax checks pass on Node 26.7.0 and Node 24.13.0. This

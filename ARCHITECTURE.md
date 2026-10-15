@@ -59,7 +59,8 @@ scope and preserve difference bidding and both boards.
   directory is NOT a legitimate way to renew a grant or reset its spending.
 - `cdp-signer.mjs`: documented account-scoped SDK calls, fresh user/wallet/delegation
   and project-policy checks, narrow typed-data construction, server-side access
-  token verification helper. No public enrollment HTTP endpoint is implemented.
+  token verification helper, including session-only authentication for revocation
+  after a delegation expires.
 - `broker.mjs`: reserve before signing, no repayment, recovery of interrupted
   states only from independent existing chain/Stripe evidence.
 - `merchant.mjs`: official x402 resource server/facilitator adapter, using a
@@ -74,8 +75,21 @@ scope and preserve difference bidding and both boards.
   not CDP/Stripe credentials. Use a fresh cryptographically random 32-byte token
   per broker instance and bind it explicitly to `127.0.0.1`. This is not public
   HTTPS transport or protection against a compromised local OS/port-hijacking peer.
+- `enrollment-store.mjs`: fixed-project/wallet lifetime mandate registry and fixed
+  payer ledger. Pending initialization and lost registry/ledger fail closed;
+  there is no automated renewal, budget reset or incomplete-state recovery.
+- `enrollment.mjs`: fresh provider authentication, short one-use frozen proposal,
+  explicit one-time mandate confirmation and session-authenticated stop/revoke.
+  Separate exact-origin browser enrollment and reject-Origin agent listeners.
+  An owner-session recovery connection works after expiry/revocation/restart,
+  never renews the original grant, and has no payment/sign/settle capability.
+- `runtime.mjs` / `operator.mjs`: explicit private-config local testnet bootstrap,
+  no policy/account/funding mutation at startup; one protected order directory,
+  one private shared payer ledger and a separate merchant ledger. Not imported
+  by the default server. See [operator setup](DEVELOPMENT_SETUP.md).
 - `examples/email-onboarding`: own-project/own-email SDK sign-in and a separate
-  account-scoped delegation button. Backend enrollment remains unconnected.
+  account-scoped delegation button; the local backend connection is development
+  source, not provider acceptance or a hosted public service.
 
 The CDP SDK project policy is global to that project, not per-user. Its per-call
 template follows the configured grant and cannot be used to promise different
@@ -84,8 +98,8 @@ cumulative budgets remain trusted-broker checks, not provider-wide guarantees.
 Use a separate trusted process for a different CDP project. Never give AI clients
 the project's developer API key, Wallet Secret or policy-edit access.
 
-Still required: authenticated bounded-mandate enrollment and any public HTTPS
-transport, actual empty
+Still required: actual provider acceptance of authenticated bounded-mandate
+enrollment and any public HTTPS transport, actual empty
 development-project setup and negative policy tests, real email/delegation flow,
 a new testnet transfer using that provider signer, isolated fulfillment/recovery,
 and native-client acceptance. The prior website's successful disposable-key test

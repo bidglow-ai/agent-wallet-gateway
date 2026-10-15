@@ -10,7 +10,8 @@ function token(value){if(typeof value!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(va
 // Local authenticated transport: each instance is bound to ONE pre-authorized
 // broker/grant. It never accepts CDP keys, sessions, grants, arbitrary typed data
 // or caller-supplied orders. Browser requests and public network use are rejected.
-export function createBrokerHttpServer({broker,orderProvider,clientToken}){
+export function createBrokerHttpServer({broker,orderProvider,clientToken,allowPayment=true}){
+  if(typeof allowPayment!=='boolean')throw new PaymentError('INVALID_BROKER_CONFIGURATION');
   const expected=digest(token(clientToken));let inFlight=0;
   const server=http.createServer(async(req,res)=>{
     const reply=(status,value)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"});res.end(JSON.stringify(value));};
@@ -31,9 +32,10 @@ export function createBrokerHttpServer({broker,orderProvider,clientToken}){
         let body;try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new PaymentError('INVALID_BROKER_REQUEST');}
         if(!body||Object.getPrototypeOf(body)!==Object.prototype||Object.keys(body).length!==0)throw new PaymentError('INVALID_BROKER_REQUEST');
       }
-      if(req.url==='/v1/status')return reply(200,{testnetOnly:true,mainnetEnabled:false,fundingAccepted:false});
+      if(req.url==='/v1/status')return reply(200,{testnetOnly:true,mainnetEnabled:false,fundingAccepted:false,recoveryOnly:!allowPayment});
       const [,_id,operation]=match;
       if(operation==='pay'){
+        if(!allowPayment)return reply(403,{error:'BROKER_RECOVERY_ONLY',automaticRetryAllowed:false});
         const order=await orderProvider.get(_id);
         if(!order||order.id!==_id)throw new PaymentError('AUTHENTICATED_ORDER_REQUIRED');
         return reply(200,await broker.pay(order));

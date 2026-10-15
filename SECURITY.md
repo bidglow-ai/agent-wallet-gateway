@@ -12,6 +12,15 @@ One CDP project per trusted process; the pinned SDK has shared client state.
 Use distinct payer and merchant state directories. Never share/multiply one
 budget across new directories as a normal operational workaround.
 
+The separate development enrollment service authenticates the provider session
+and fixed operator-selected wallet; it never accepts a caller's user ID, grant,
+budget or state directory as authority. One-use proposals require explicit owner
+confirmation, then all clients share a fixed lifetime mandate and payer ledger.
+Revocation racing asynchronous activation blocks capability issuance. Pending
+initialization or lost registry/ledger stops enrollment; automatic reconstruction
+and safe renewal are intentionally unimplemented. These protections have fixture
+tests, not real email/provider or funded-wallet acceptance.
+
 The optional testnet HTTP factory rejects browser Origin headers, validates the
 exact loopback Host/peer and uses a per-instance scoped bearer token. Bind it to
 127.0.0.1; do not publish it through a proxy, tunnel or public interface. Plain

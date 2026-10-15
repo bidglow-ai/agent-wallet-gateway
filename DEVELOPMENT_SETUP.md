@@ -1,0 +1,146 @@
+# Own-email unattended wallet — development operator guide
+
+**Development source, not a funded-wallet release. Mainnet is hard-disabled.**
+The public default `npm start` is unchanged and read-only. Do not send real USDC,
+ETH or any other real asset to a development wallet. No provider acceptance or
+native-client payment success is established by the fixture tests below.
+
+## What is now implemented
+
+The local example lets the owner sign in with their own email through Coinbase,
+select an empty EVM account, and grant a short account delegation. The backend
+independently validates the session and account through the official provider.
+It then proposes a frozen mandate: one testnet merchant/payee, at most 5 test USDC
+per payment, 10 test USDC for the entire mandate, and a bounded expiry. The owner
+confirms this mandate **once**, not for every subsequent authorized payment.
+
+One restricted broker capability can be used by compatible local MCP adapters.
+All adapters share one persisted payer ledger. A second login, agent, session or
+restart cannot renew the expiry, change identity/merchant/caps or clear spending.
+The backend has no reset, renew, grant-edit or arbitrary-signing endpoint. A fresh
+directory is not an authorized way to renew the mandate. Revoked or expired
+mandates require a separately reviewed future renewal design, not file deletion.
+
+This milestone is single-owner self-hosted development: each operator uses their
+own isolated CDP development project, wallet, private state and server credentials.
+It is not a public hosted multi-tenant wallet where email alone is sufficient.
+Email in AWAL, Coinbase Wallet, or another CDP project may resolve to a different
+wallet. Never fund an address on the assumption those products share it.
+
+## Before connecting a provider
+
+1. Create a separate **empty development CDP project** through the official portal.
+   Review its current terms/free-tier limits. Nothing here guarantees free use.
+   Never reuse an account with real funds for delegation experiments.
+2. Follow official [email authentication](https://docs.cdp.coinbase.com/wallets/quickstart/user-auth)
+   and [delegated-signing setup](https://docs.cdp.coinbase.com/wallets/using-wallets/delegated-signing).
+   Allowlist only the local development origin. The example disables optional SDK
+   analytics. Sign in in the browser; never send email codes or secrets in chat.
+3. Pin the authenticated **development** wallet's public address in operator
+   configuration. This is intentionally not a first-request-wins enrollment.
+4. Install and independently test the proposed project policy returned by
+   `providerPolicy(grant)` in `src/unattended/cdp-signer.mjs`, in this project only.
+   The service does not create or weaken provider policies at startup. Check wrong
+   payee/token/value/type, expiry/revocation and unexpected provider operations.
+   Provider policies do **not** establish the broker's lifetime budget or order
+   binding, and omitted provider operations can default to allowed. Broad project
+   administrator credentials must remain outside agent processes.
+5. Obtain the normal CDP project API credentials/Wallet Secret and the matching
+   **Stripe sandbox** key in the operator's protected environment. Do not paste
+   them into a chat, browser frontend, MCP configuration, repository or issue.
+   This development source does not automatically request expanded permissions.
+
+Actual provider setup and negative tests have not been accepted for this new
+implementation. Do not skip those gates because an SDK schema test passed.
+
+## Local operator process
+
+Copy `examples/unattended-operator.example.json` to an absolute path **outside Git**
+in a private directory. Replace its public placeholders and private values there,
+never in the tracked example. The directory must be owner-only (0700), and the
+file owner-only (0600), regular, with one link. Both state and order directories
+must be distinct, absolute and owner-only. `developmentProjectConfirmed` is an
+explicit operator assertion, not an API proof that a project is safe.
+
+```
+AGENT_TESTNET_DEVELOPMENT=I_UNDERSTAND_NO_REAL_FUNDS AGENT_OPERATOR_CONFIG=/absolute/private/operator.json node src/unattended/operator.mjs
+```
+
+Startup prints only the local enrollment URL and `fundingAccepted:false`. It does
+not send an OTP, grant delegation, apply a policy, request funds, sign or pay.
+The server binds only `127.0.0.1`. Keep it local: no reverse proxy, tunnel,
+container public bind, public domain or production deployment is supported.
+Plain loopback does not protect against a compromised local OS or port hijacking.
+
+In `examples/email-onboarding`, set only its documented public project ID,
+development assertion and enrollment origin. Never prefix provider credentials
+with `VITE_`; they would become public browser code. Run its frontend explicitly
+on the exact configured `http://127.0.0.1:4376` origin. Do not use `localhost` as an
+alias: the enrollment endpoint requires the exact configured Origin/Host.
+
+After provider login/delegation, request the bounded proposal, review its fixed
+scope, and confirm. The restricted agent connection is returned only to that
+authenticated owner, kept in UI memory and cleared on account change/sign-out.
+It is a spending capability within the mandate, not a harmless public ID. Do not
+send it to a website or publish it. Sign-out does not revoke a delegation; use
+the backend stop/revoke operation first. Local revocation remains durable even
+if Coinbase's revocation request fails; already issued signatures may still be
+usable until their short order expiry.
+
+## Orders and agent adapters
+
+For this development milestone, frozen acceptance orders must be prepared by a
+trusted isolated merchant/operator, not by an AI supplying an arbitrary payee,
+amount, signature or business quote. `PrivateOrderProvider` reads one 0600 JSON
+file per UUID from the configured private order directory. Its complete shape is
+the validated `ORDER_KEYS` contract in `src/unattended/intent.mjs`; the merchant
+account, immutable grant, network, payee, nonce salt and short expiry must match.
+No production listing/owner/quote endpoint is included. A private filename is not
+a substitute for a future production merchant's authenticated order creation.
+
+Only pass the returned restricted `AGENT_BROKER_ORIGIN` and `AGENT_BROKER_TOKEN`
+to a standard local stdio client running `node src/unattended/client.mjs`.
+The adapter refuses inherited CDP/Stripe developer credential environment names.
+It exposes only pay-by-trusted-order-ID, inspect and reconcile plus truthful
+readiness. It cannot enroll a wallet, raise a limit, reset a budget, change the
+recipient or submit arbitrary typed data. Never configure automatic approval for
+unrelated client tools or claim all hosted AI chat applications support stdio.
+
+The per-instance capability and payment listener port change on service restart.
+An authenticated owner must obtain the new local connection; existing grant and
+budget remain unchanged. No provider secrets are returned. A fresh capability
+does not prove a native model actually used the payment tools.
+
+After expiry or revocation, use the separate explicitly approved
+`POST /enrollment/v1/recover` owner-session route (`{wallet,approved:true}`). It
+returns the **original** grant and a distinct `recoveryOnly:true` connection for
+inspection/reconciliation. It does not require an active provider delegation,
+renew the mandate or permit pay. The recovery listener rejects payment before
+reading an order and its broker has no usable signing/settlement adapters. It
+never initializes a facilitator. Reconciliation may record matching existing
+testnet settlement in Stripe sandbox, but never sends funds again.
+
+## Failure behavior and remaining gates
+
+- Duplicate orders/business quotes are never repaid. Unknown outcomes retain the
+  entire reserved amount. Inspect/reconcile does not sign or settle again.
+- Reconciliation checks canonical/finalized testnet chain evidence and fresh
+  Stripe sandbox identity/PaymentIntent evidence; pending is not success.
+- Registry initialization is intentionally two-phase. A crash can leave
+  `ENROLLMENT_INCOMPLETE`, which stops enrollment. An active registry with a missing
+  payer ledger also stops; a leftover payer without a registry stops. Never
+  delete files or reconstruct a fresh empty budget as an automated repair. Safe
+  operator-assisted recovery of these states remains a future acceptance gate.
+- The local OS user/operator/provider/RPC are trusted. This is not wallet-wide,
+  cryptographically enforced cumulative spending or protection from a hostile
+  same-user process, developer-key compromise, database rollback or deletion.
+- The email example still has documented moderate transitive dependency
+  advisories. Its Vite development security patch and bundle-boundary checks do
+  not remove them or certify provider onboarding/funded-wallet use.
+
+Before any funding instructions: complete actual own-email/delegation flow,
+negative provider-policy tests, a **new** bounded test-USDC payment through the
+new signer, independent settlement/Stripe proof, crash/revocation acceptance,
+native compatible clients, and a separate production security/accounting review.
+A future mainnet test needs explicit bounded owner authority after those gates.
+No amount of mocked tests establishes these external results.
