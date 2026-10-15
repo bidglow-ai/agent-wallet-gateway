@@ -68,7 +68,9 @@ export class OnboardingController {
   }
   #setUser(user: Coinbase.User | null) {
     const accounts = user?.evmAccountObjects?.map(account => account.address.toLowerCase()).filter((address): address is Address => /^0x[0-9a-f]{40}$/.test(address)) || [];
-    if (user?.userId !== this.#subject || !this.#selected || !accounts.includes(this.#selected)) {
+    // An unchanged signed-out notification is not a new identity and must not
+    // discard an email verification flow that is still awaiting its code.
+    if (user?.userId !== this.#subject || (!!user?.userId && (!this.#selected || !accounts.includes(this.#selected)))) {
       this.#identityEpoch++;
       this.#selected = accounts[0]; this.#delegation = { status: 'unchecked' };
       this.#clearEnrollment();this.#flowId=undefined;
@@ -127,14 +129,41 @@ export class OnboardingController {
       if (this.#subject) throw new OnboardingError('SIGN_OUT_BEFORE_SWITCHING_USER');
       // Email and OTP are passed directly to the official SDK and never retained
       // in controller state, logs, browser storage, URLs or application requests.
+      // A resend replaces the old flow locally even if its response is lost.
+      // Never permit an old code to be attributed to the new request.
+      this.#flowId = undefined;
+      const epoch=this.#identityEpoch;
       const result = await this.#sdk.signInWithEmail({ email: email.trim() });
+      if(epoch!==this.#identityEpoch||this.#subject)throw new OnboardingError('AUTHENTICATED_ACCOUNT_CHANGED');
       this.#flowId = result.flowId;
     });
+  }
+  cancelPendingSignIn() {
+    if(this.#busy)throw new OnboardingError('OPERATION_IN_PROGRESS');
+    if(!this.#ready||this.#subject)throw new OnboardingError('SIGN_OUT_BEFORE_SWITCHING_USER');
+    this.#flowId=undefined;
+    this.#identityEpoch++;
   }
   async verifyCode(otp: string) {
     return this.#exclusive(async () => {
       if (!this.#flowId) throw new OnboardingError('REQUEST_CODE_FIRST');
-      const result = await this.#sdk.verifyEmailOTP({ flowId: this.#flowId, otp });
+      const flowId=this.#flowId,epoch=this.#identityEpoch;
+      let result: Awaited<ReturnType<OnboardingSdk['verifyEmailOTP']>>;
+      try { result=await this.#sdk.verifyEmailOTP({ flowId, otp }); }
+      catch(error){
+        if(epoch!==this.#identityEpoch||flowId!==this.#flowId)throw new OnboardingError('AUTHENTICATED_ACCOUNT_CHANGED');
+        if((error as {errorType?:unknown})?.errorType==='otp_verification_code_invalid')throw new OnboardingError('OTP_CODE_NOT_ACCEPTED');
+        throw error;
+      }
+      if(typeof result?.user?.userId!=='string'||!result.user.userId.trim())
+        throw new OnboardingError('PROVIDER_OPERATION_UNCONFIRMED');
+      if(epoch!==this.#identityEpoch||flowId!==this.#flowId){
+        // The official SDK can notify the authenticated user before resolving
+        // verifyEmailOTP. Accept that same completed identity, without applying
+        // a stale result over the current SDK account/selection.
+        if(result.user?.userId&&this.#subject===result.user.userId&&!this.#flowId)return;
+        throw new OnboardingError('AUTHENTICATED_ACCOUNT_CHANGED');
+      }
       this.#flowId = undefined; this.#setUser(result.user);
     });
   }

@@ -19,12 +19,14 @@
         <label for="email">Your email</label>
         <input id="email" type="email" autocomplete="email" required>
         <button id="send-code" disabled>Send a verification code</button>
+        <button id="change-email" type="button" disabled>Change email</button>
       </form>
       <form id="otp-form" method="post" action="#">
         <label for="otp">Email verification code</label>
         <input id="otp" type="password" inputmode="numeric" autocomplete="off" required disabled>
         <button id="verify-code" disabled>Verify code</button>
       </form>
+      <p id="status" role="status" aria-live="polite">Configuration required. No provider operation has been performed.</p>
       <section aria-labelledby="account-heading">
         <h2 id="account-heading">2. Choose this project's development account</h2>
         <label for="account">Authenticated EVM account</label>
@@ -66,7 +68,6 @@
         <button id="copy-connection" type="button" disabled>Copy restricted connection</button>
         <p>Copying deliberately puts this capability on your clipboard; your operating system may retain clipboard history. No capability is saved by this application.</p>
       </section>
-      <p id="status" role="status" aria-live="polite">Configuration required. No provider operation has been performed.</p>
       <button id="sign-out" type="button" disabled>Sign out of this example</button>
       <p class="footnote">Email and OTP go only to Coinbase through its SDK. A fresh official access token is sent only in an Authorization header to the configured trusted local enrollment endpoint, never in a URL or request body. The example does not log or persist it. The SDK manages its own session storage. Signing out does not revoke delegation or an enrolled mandate; use the combined stop first.</p>
     </main>

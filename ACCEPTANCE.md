@@ -1,5 +1,39 @@
 # Acceptance evidence
 
+## Email visibility and sign-in feedback fix — October 15
+
+- Fixed a real UI bug: submitting the email and completing any action both
+  cleared the email field. The pending email now stays in the DOM/private UI
+  memory while requesting, awaiting or retrying a code. It is not added to the
+  controller's public state, application storage, logs or backend requests.
+- Awaiting-code input is read-only and resends stay bound to that same email.
+  Changing email explicitly cancels the local flow; an unconfirmed resend
+  cannot continue using the old flow. No automatic resend or payment occurs.
+  OTP attempts clear the code, not the email; successful authentication,
+  sign-out attempts and identity changes clear temporary sign-in fields.
+- Feedback now appears next to the sign-in forms. Pasted OTP edge whitespace
+  is trimmed; internal content is not rewritten. Invalid-code feedback uses
+  one allowlisted provider error type, never its raw diagnostic message.
+- Ten new tests execute the actual main UI module/event bindings with the real
+  controller and synthetic SDK/DOM. They cover pending/error/retry/double-click,
+  resend/change, missing verified identity, normal early SDK auth notifications,
+  stale identity callbacks and sign-out cleanup without granting delegation or
+  calling an enrollment backend. Frontend **40/40 tests** pass on Node 24.13.0
+  and Node 26.7.0; typecheck and Vite production build pass. Root syntax/checks
+  and **140/140 tests** were rerun on Node 26.7.0. Independent review found no
+  blocking regression.
+- Actual browser verification requested one fresh code through the official
+  SDK and confirmed that the email stayed populated/read-only and OTP controls
+  became usable. The page was handed to the owner for code entry; this is not
+  completed real email authentication, delegation or payment acceptance.
+- An earlier real verification attempt returned HTTP 401. Its exact cause was
+  not established by the email-visibility bug or synthetic tests, and no claim
+  is made that real authentication has passed. Browser-SDK dependency inventory
+  still has five moderate entries, zero high/critical; the audit remains failing.
+
+No provider signing, transfer, production change or funding instruction was
+performed. Remaining external gates below are unchanged. **Do not fund a wallet.**
+
 ## Real development-browser startup — October 15, NOT a funding release
 
 - Root syntax checks and **140/140 isolated tests** pass on Node 26.7.0 and

@@ -19,10 +19,14 @@ const consent = element<HTMLInputElement>('consent'), hours = element<HTMLSelect
 const status = element<HTMLElement>('status');
 const mandateConsent=element<HTMLInputElement>('mandate-consent'),revokeConsent=element<HTMLInputElement>('revoke-consent'),recoveryConsent=element<HTMLInputElement>('recovery-consent');
 let uiBusy = false;
+// The pending email is private UI memory, never part of controller.state().
+let pendingEmail = '', wasAuthenticated = false;
+function clearSignInFields() { pendingEmail=''; email.value=''; otp.value=''; }
 const messages: Record<string, string> = {
   DEVELOPMENT_PROJECT_REQUIRED: 'Set the public development project ID and confirm the separate development project before continuing.',
   LOOPBACK_DEVELOPMENT_ONLY: 'This example runs only on a loopback HTTP development origin.',
   PROVIDER_OPERATION_UNCONFIRMED: 'The provider did not confirm the operation. Do not assume authentication, delegation or revocation succeeded. Refresh its status.',
+  OTP_CODE_NOT_ACCEPTED: 'Sign-in was not confirmed. Enter the latest verification code for the displayed email, or request a new code.',
   DELEGATION_STATUS_UNCONFIRMED: 'Delegation status is unavailable. No new delegation was requested.',
   REVIEW_EXISTING_DELEGATION: 'This account already has an active delegation. Review or revoke it before creating another.',
   AUTHENTICATED_ACCOUNT_CHANGED: 'The signed-in account changed. Select and review the account again.',
@@ -38,8 +42,14 @@ const messages: Record<string, string> = {
 };
 function render() {
   const state = controller.state(), busy = uiBusy || state.busy;
+  if(state.authenticated||wasAuthenticated!==state.authenticated)clearSignInFields();
+  wasAuthenticated=state.authenticated;
+  if(state.awaitingCode&&pendingEmail)email.value=pendingEmail;
   element<HTMLButtonElement>('send-code').disabled = busy || !state.ready || state.authenticated;
   email.disabled = busy || !state.ready || state.authenticated;
+  email.readOnly = state.awaitingCode;
+  element<HTMLButtonElement>('send-code').textContent=state.awaitingCode?'Send a new code to this email':'Send a verification code';
+  element<HTMLButtonElement>('change-email').disabled=busy||!state.awaitingCode;
   element<HTMLButtonElement>('verify-code').disabled = busy || !state.awaitingCode;
   otp.disabled = busy || !state.awaitingCode;
   account.replaceChildren(...(state.accounts.length ? state.accounts.map(address => {
@@ -76,20 +86,30 @@ function render() {
   if(connectionField.value!==connectionValue)connectionField.value=connectionValue;
   element<HTMLButtonElement>('copy-connection').disabled=busy||!connection;
 }
-async function act(operation: () => Promise<void>, success: string) {
+async function act(operation: () => Promise<void>, success: string, failure?: string) {
   if (uiBusy) return;
   uiBusy = true; render();
   try { await operation(); status.textContent = success; }
-  catch (error) { status.textContent = error instanceof OnboardingError ? messages[error.code] || 'Operation not confirmed. Review the selected account before retrying.' : 'Operation not confirmed.'; }
-  finally { uiBusy = false; otp.value = ''; email.value = ''; consent.checked = false; mandateConsent.checked=false;revokeConsent.checked=false;recoveryConsent.checked=false;render(); }
+  catch (error) { status.textContent = error instanceof OnboardingError ? (failure&&error.code==='PROVIDER_OPERATION_UNCONFIRMED'?failure:messages[error.code]) || 'Operation not confirmed. Review the selected account before retrying.' : failure||'Operation not confirmed.'; }
+  finally { uiBusy = false; otp.value = ''; consent.checked = false; mandateConsent.checked=false;revokeConsent.checked=false;recoveryConsent.checked=false;render(); }
 }
 element<HTMLFormElement>('email-form').addEventListener('submit', event => {
-  event.preventDefault(); const value = email.value; email.value = '';
-  void act(() => controller.sendCode(value), 'Verification code requested through the official SDK. Enter it below.');
+  event.preventDefault(); if(uiBusy||controller.state().busy)return;
+  const value=controller.state().awaitingCode?pendingEmail:email.value.trim();
+  pendingEmail=value;email.value=value;
+  void act(() => controller.sendCode(value), 'Verification code requested for the displayed email. Use only the latest code; an earlier request may no longer work.');
 });
 element<HTMLFormElement>('otp-form').addEventListener('submit', event => {
-  event.preventDefault(); const value = otp.value; otp.value = '';
-  void act(() => controller.verifyCode(value), 'Signed in locally through Coinbase. No delegation or backend enrollment was created.');
+  event.preventDefault(); if(uiBusy||controller.state().busy)return;
+  const value = otp.value.trim(); otp.value = '';
+  void act(() => controller.verifyCode(value), 'Signed in locally through Coinbase. No delegation or backend enrollment was created.',
+    'Sign-in was not confirmed. Retry the latest verification code for the displayed email, or manually request a new code.');
+});
+element('change-email').addEventListener('click',()=>{
+  if(uiBusy||controller.state().busy)return;
+  controller.cancelPendingSignIn();pendingEmail='';otp.value='';
+  status.textContent='Previous code cancelled locally. Edit your email and request a new code.';
+  render();email.focus();
 });
 account.addEventListener('change', () => { controller.selectAccount(account.value); consent.checked = false;mandateConsent.checked=false;revokeConsent.checked=false;recoveryConsent.checked=false; render(); });
 consent.addEventListener('change', render);
@@ -100,7 +120,7 @@ element('grant').addEventListener('click', () => {
   void act(() => controller.grantDelegation(duration, approved), 'Provider account delegation confirmed for the displayed duration. Review and separately approve a backend mandate next; no payment was sent.');
 });
 element('revoke').addEventListener('click', () => { void act(() => controller.revokeDelegation(), 'Coinbase confirmed revocation for the selected account. Previously issued signatures can remain usable until their own expiry.'); });
-element('sign-out').addEventListener('click', () => { void act(() => controller.signOut(), 'Signed out of this example. Signing out does not revoke a delegation.'); });
+element('sign-out').addEventListener('click', () => { if(uiBusy)return;clearSignInFields();void act(() => controller.signOut(), 'Signed out of this example. Signing out does not revoke a delegation.'); });
 element('proposal').addEventListener('click',()=>{void act(()=>controller.proposeMandate(),'Frozen mandate received. Review every displayed limit before giving separate consent.');});
 element('confirm-mandate').addEventListener('click',()=>{const approved=mandateConsent.checked;void act(()=>controller.confirmMandate(approved),'Backend confirmed this one-time bounded testnet mandate. Restricted connection is in memory only. No provider payment acceptance is established.');});
 element('stop-mandate').addEventListener('click',()=>{const approved=revokeConsent.checked;void act(()=>controller.revokeMandate(approved),'Backend confirmed local stop and provider revocation. Previously issued signatures may remain valid until their own expiry.');});

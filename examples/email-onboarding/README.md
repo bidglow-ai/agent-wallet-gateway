@@ -62,6 +62,16 @@ write them to browser storage, put them in URLs, or submit them to an applicatio
 backend. The provider SDK has its own session-storage behavior; do not equate
 this example with an ephemeral or storage-free provider session.
 
+During sign-in, the entered email remains visible in the form and temporary UI
+memory after send/verification errors. While awaiting a code it is read-only;
+resend uses that same email and instructs the user to use only the latest code.
+Change email explicitly cancels the previous local flow before editing. Each
+verification attempt clears the OTP input, not the email, so a failed code can
+be retried. Successful sign-in, sign-out attempts and actual identity changes
+clear these temporary fields. An unchanged signed-out SDK notification does not
+cancel an in-progress flow. Neither email nor OTP is included in the controller's
+public state, and no sign-in action grants delegation or a payment mandate.
+
 Sign-in may create an EVM EOA in the development project. It never grants
 delegation automatically. After authentication, the user separately selects an
 account, checks explicit consent and clicks the delegation button for 1, 4 or
