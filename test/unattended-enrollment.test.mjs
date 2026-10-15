@@ -84,14 +84,25 @@ test('historical recovery authenticates the original owner without renewing an e
   const result=await authority.recover('owner.session',{wallet,approved:true});
   assert.deepEqual(result.grant,grant);assert.equal(result.recoveryOnly,true);assert.equal(recoveries,1);
 });
-test('enrollment HTTP enforces exact origin, bearer JSON and narrow routes without leaking errors',async t=>{
-  const f=fixture(),origin='http://127.0.0.1:4376';
+test('localhost browser support never permits a localhost broker capability on confirm or recovery',async()=>{
+  const f=fixture();f.connection.brokerOrigin='http://localhost:4599';
+  const proposal=await f.authority.propose('owner.session',{wallet});
+  await assert.rejects(f.authority.confirm('owner.session',{wallet,nonce:proposal.nonce,approved:true}),{code:'LOCAL_ONBOARDING_ORIGIN_REQUIRED'});
+  const authority=new EnrollmentAuthority({signer:{verifySession:async()=>({userId,wallet})},registry:f.registry,config,
+    activate:()=>assert.fail('recovery must not activate payment'),revoke:()=>{},recover:async()=>f.connection});
+  await assert.rejects(authority.recover('owner.session',{wallet,approved:true}),{code:'LOCAL_ONBOARDING_ORIGIN_REQUIRED'});
+});
+for(const origin of ['http://127.0.0.1:4376','http://localhost:4376'])test(`enrollment HTTP enforces exact ${origin}, bearer JSON and narrow routes without leaking errors`,async t=>{
+  const f=fixture();
   const server=createEnrollmentHttpServer({authority:f.authority,onboardingOrigin:origin});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   t.after(()=>new Promise(resolve=>server.close(resolve)));
   const url=`http://127.0.0.1:${server.address().port}/enrollment/v1/proposal`;
   const request=(changes={})=>fetch(url,{method:'POST',headers:{Origin:origin,Authorization:'Bearer owner.session','Content-Type':'application/json',...changes.headers},body:JSON.stringify(changes.body??{wallet})});
   assert.equal((await request({headers:{Origin:'https://evil.example'}})).status,403);
+  for(const wrongOrigin of [origin.includes('localhost')?'http://127.0.0.1:4376':'http://localhost:4376','http://localhost:4375','http://localhost.evil.example:4376']){
+    const rejected=await request({headers:{Origin:wrongOrigin}});assert.equal(rejected.status,403);assert.equal(rejected.headers.get('Access-Control-Allow-Origin'),null);
+  }
   const wrongHost=await new Promise((resolve,reject)=>{const req=http.request(url,{method:'POST',headers:{Host:'evil.example',Origin:origin,Authorization:'Bearer owner.session','Content-Type':'application/json'}},res=>{res.resume();res.on('end',()=>resolve(res.statusCode));});req.on('error',reject);req.end(JSON.stringify({wallet}));});
   assert.equal(wrongHost,403);
   assert.equal((await request({headers:{Authorization:'Bearer wrong'}})).status,409);

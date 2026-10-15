@@ -19,8 +19,12 @@ async function freePort(){const s=createServer();await new Promise(resolve=>s.li
 test('operator configuration rejects mainnet/live keys, public listener and ambiguous private paths',t=>{
   const dir=directory(t),f=fixture(),config=configFor(dir,f);
   assert.equal(validateOperatorConfig(config).developmentProjectConfirmed,true);
+  assert.equal(validateOperatorConfig({...config,onboardingOrigin:'http://localhost:4376'}).onboardingOrigin,'http://localhost:4376');
   for(const changed of [{developmentProjectConfirmed:false},{network:'eip155:8453'},{perCallAtomic:'5000001'},{totalAtomic:'10000001'},
     {onboardingOrigin:'https://bidglow.ai'},{stateDir:'relative'},{orderDirectory:config.stateDir},{durationMs:172800000},{enrollmentPort:80}])assert.throws(()=>validateOperatorConfig({...config,...changed}));
+  for(const onboardingOrigin of ['http://localhost.evil.example:4376','http://www.localhost:4376','http://localhost.:4376','http://127.0.0.2:4376','http://0.0.0.0:4376','http://[::1]:4376',
+    'https://localhost:4376','http://localhost','http://localhost:80','http://localhost:4377','http://user@localhost:4376','http://localhost:4376/','http://localhost:4376?x=1','http://localhost:4376#x','http://2130706433:4376','http://127.1:4376'])
+    assert.throws(()=>validateOperatorConfig({...config,onboardingOrigin}),{code:'LOCAL_ONBOARDING_ORIGIN_REQUIRED'});
   const file=join(dir,'operator.json');
   writeFileSync(file,JSON.stringify({config,credentials:{apiKeyId:'synthetic-key-id',apiKeySecret:'synthetic-key-secret',walletSecret:'synthetic-wallet-secret',stripeTestKey:'sk_live_'+'1'.repeat(25)}}),{mode:0o600});
   assert.throws(()=>loadOperatorBundle(file),{code:'SANDBOX_EVIDENCE_CONFIGURATION_REQUIRED'});
@@ -39,7 +43,7 @@ test('private order source pins full grant/account and refuses client paths or m
   writeFileSync(path,JSON.stringify({...f.order,merchantAccount:'acct_otheraccount'}));assert.throws(()=>provider.get(f.order.id),{code:'AUTHENTICATED_ORDER_REQUIRED'});
 });
 test('actual local enrollment -> restricted broker -> fixture payment -> restart preserves one budget and revocation',async t=>{
-  const dir=directory(t),f=fixture(),port=await freePort(),config=configFor(dir,f,port);let signs=0,settles=0,revokeFails=false,loseNext=false;
+  const dir=directory(t),f=fixture(),port=await freePort(),config={...configFor(dir,f,port),onboardingOrigin:'http://localhost:4376'};let signs=0,settles=0,revokeFails=false,loseNext=false;
   const settled=new Map();
   const dependencies={
     signer:{

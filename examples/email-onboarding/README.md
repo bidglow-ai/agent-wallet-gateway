@@ -5,8 +5,19 @@ Standalone Vite + vanilla TypeScript example using official `@coinbase/cdp-core`
 or an accepted native wallet integration. No real provider authentication,
 delegation, signing or token transfer was run to verify this example.
 
+The SDK's installed Zustand 5.x root export also imports its React entrypoint.
+Although Zustand marks React as an optional peer, Vite's development optimizer
+requires that real peer to resolve. The example explicitly pins **React 19.3.1**
+from the official npm registry, compatible with Zustand's `react >=18.0.0` peer.
+There is no React UI, React DOM renderer, SDK replacement, alias or override.
+A production build alone previously tree-shook away the missing peer and did not
+catch this development startup failure.
+
 Local verification covers TypeScript SDK imports, mocked controller/UI-boundary
-tests, dependency-path regression tests and the Vite build. The dependency audit
+tests, installed-peer resolution, a fresh real Vite development prebundle,
+dependency-path regression tests and the Vite production build. Dependency tests
+use an isolated temporary optimizer cache and do not load operator environment
+files, authenticate with Coinbase or call a wallet operation. The dependency audit
 still reports five moderate package entries in the pinned SDK's transitive
 Solana/web3.js → jayson → stream-json/uuid tree. No compatible upstream fix was
 available at the 2026-10-15 review; no forced override or SDK downgrade was applied.
@@ -31,8 +42,14 @@ the development project after reviewing its signing policies.
 
 Copy `.env.example` to `.env.local`. Set the public development project UUID and
 `VITE_DEVELOPMENT_PROJECT_CONFIRMED=true`, then run `npm run dev` and open exactly
-`http://127.0.0.1:4376`. The server refuses an occupied port rather than silently
-changing the allowlisted origin. `localhost` and IPv6 aliases are not accepted.
+`http://localhost:4376`. Add that exact origin to the development project's domain
+allowlist: Coinbase rejects IP-address domains such as `127.0.0.1`. Vite still
+listens only on `127.0.0.1` and refuses an occupied port rather than silently
+changing the allowlisted origin. The frontend guard also permits the explicit
+`http://127.0.0.1:4376` loopback form for isolated fixtures, but it is not an alias
+for the configured origin: use only the one exact frontend origin allowlisted by
+both Coinbase and your backend. No other hostname, IP, IPv6, HTTPS or portless
+frontend is accepted.
 The flag is the
 operator's assertion, not a verified provider environment boundary. By default,
 the project ID is blank and SDK initialization is blocked. There are no account
@@ -69,12 +86,13 @@ testnet acceptance. Do not send mainnet funds to this example.
 Leave `VITE_ENROLLMENT_ORIGIN` blank to keep enrollment blocked while retaining
 the independent SDK onboarding example. To connect a separately started trusted
 development service, set this **public configuration** to its exact
-`http://127.0.0.1:port` origin. No path, query, credential, localhost alias,
+`http://127.0.0.1:4377` origin (or its separately configured explicit port).
+No path, query, credential, localhost alias,
 redirect or arbitrary remote endpoint is accepted. Review this endpoint before
 signing in: it receives your official Coinbase session token. Plain loopback is
 a trusted local-machine boundary, not protection from compromised local software.
 
-The backend must allowlist exactly `http://127.0.0.1:4376`, validate Host/Origin,
+The backend must allowlist exactly `http://localhost:4376`, validate Host/Origin,
 require JSON and validate the official access token with its own protected CDP
 project credentials. No wildcard CORS, browser cookies, client-supplied subject
 or email identity proof is used. The frontend uses documented `getAccessToken()`
@@ -135,4 +153,5 @@ Official references:
 - [Core SDK package](https://www.npmjs.com/package/@coinbase/cdp-core)
 - [Delegated signing](https://docs.cdp.coinbase.com/wallets/using-wallets/delegated-signing)
 - [Wallet authentication](https://docs.cdp.coinbase.com/wallets/authentication/implementation-guide)
+- [Local development domains](https://docs.cdp.coinbase.com/wallets/quickstart/user-auth)
 - [Policy engine](https://docs.cdp.coinbase.com/wallets/security-and-policies/policy-engine/overview)

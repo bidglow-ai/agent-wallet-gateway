@@ -32,7 +32,7 @@ export function validateOperatorConfig(input){
   for(const path of [input.stateDir,input.orderDirectory])if(typeof path!=='string'||!isAbsolute(path)||resolve(path)!==path)throw new PaymentError('PRIVATE_STATE_DIRECTORY_REQUIRED');
   if(input.orderDirectory===input.stateDir||input.orderDirectory.startsWith(input.stateDir+'/')||input.stateDir.startsWith(input.orderDirectory+'/'))throw new PaymentError('SEPARATE_ORDER_DIRECTORY_REQUIRED');
   let origin;try{origin=new URL(input.onboardingOrigin);}catch{throw new PaymentError('LOCAL_ONBOARDING_ORIGIN_REQUIRED');}
-  if(origin.origin!==input.onboardingOrigin||origin.protocol!=='http:'||origin.hostname!=='127.0.0.1'||!origin.port||Number(origin.port)===input.enrollmentPort)throw new PaymentError('LOCAL_ONBOARDING_ORIGIN_REQUIRED');
+  if(origin.origin!==input.onboardingOrigin||origin.protocol!=='http:'||!['127.0.0.1','localhost'].includes(origin.hostname)||!origin.port||Number(origin.port)===input.enrollmentPort)throw new PaymentError('LOCAL_ONBOARDING_ORIGIN_REQUIRED');
   validateGrant({grantId:input.projectId,userId:input.projectId,wallet:input.expectedWallet,network:NETWORK,asset:TOKEN,payTo:input.payTo,
     merchantOrigin:input.merchantOrigin,perCallAtomic:input.perCallAtomic,totalAtomic:input.totalAtomic,expiresAt:Date.now()+input.durationMs});
   if(BigInt(input.perCallAtomic)%10000n||BigInt(input.totalAtomic)%10000n)throw new PaymentError('AMOUNT_NOT_WHOLE_CENTS');

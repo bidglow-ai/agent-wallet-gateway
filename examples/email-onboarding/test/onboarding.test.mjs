@@ -29,8 +29,20 @@ test('blank or unconfirmed project and non-loopback origins fail before any SDK 
   for(const config of [{...publicConfig,projectId:''},{...publicConfig,developmentConfirmed:false},{...publicConfig,developmentConfirmed:'true'},{...publicConfig,secret:'forbidden'}]){
     const f=fixture({config});await assert.rejects(f.controller.initialize(),/DEVELOPMENT_PROJECT_REQUIRED/);assert.equal(f.calls.length,0);
   }
-  for(const url of ['https://production.example/','http://192.168.1.2:4376/','https://localhost:4376/','http://localhost:4376/','http://[::1]:4376/','http://127.0.0.1/'])assert.throws(()=>validateDevelopmentConfig(publicConfig,url),/LOOPBACK_DEVELOPMENT_ONLY/);
+  for(const url of ['https://production.example/','http://192.168.1.2:4376/','https://localhost:4376/','http://[::1]:4376/','http://127.0.0.1/','http://localhost/','http://localhost:80/','http://localhost.evil.example:4376/','http://www.localhost:4376/','http://localhost.:4376/','http://localhosT.example:4376/','http://127.0.0.2:4376/','http://127.1:4376/','http://2130706433:4376/','http://0x7f000001:4376/','http://0.0.0.0:4376/','http://user@localhost:4376/','http://user:private@localhost:4376/','http://localhost@attacker.example:4376/'])assert.throws(()=>validateDevelopmentConfig(publicConfig,url),/LOOPBACK_DEVELOPMENT_ONLY/);
   assert.doesNotThrow(()=>validateDevelopmentConfig(publicConfig,'http://127.0.0.1:4376/'));
+  assert.doesNotThrow(()=>validateDevelopmentConfig(publicConfig,'http://localhost:4376/'));
+});
+test('exact localhost frontend initializes with analytics disabled while enrollment remains independently configured',async()=>{
+  const f=fixture({url:'http://localhost:4376/'});await f.controller.initialize();
+  assert.deepEqual(f.calls,[['initialize',{projectId:publicConfig.projectId,disableAnalytics:true,debugging:false,ethereum:{createOnLogin:'eoa'}}]]);
+  assert.equal(f.controller.state().ready,true);assert.equal(f.controller.state().backendEnrollment,'blocked');
+  assert.equal(f.controller.state().fundingAccepted,false);assert.equal(f.controller.state().paymentsEnabled,false);
+  const unconfirmed=fixture({url:'http://localhost:4376/',config:{...publicConfig,developmentConfirmed:false}});
+  await assert.rejects(unconfirmed.controller.initialize(),/DEVELOPMENT_PROJECT_REQUIRED/);assert.deepEqual(unconfirmed.calls,[]);
+  const wrongBackend=fixture({url:'http://localhost:4376/',config:{...publicConfig,enrollmentOrigin:'http://localhost:4377'}});
+  await assert.rejects(wrongBackend.controller.initialize(),/TRUSTED_ENROLLMENT_ORIGIN_REQUIRED/);assert.deepEqual(wrongBackend.calls,[]);
+  assert.doesNotThrow(()=>validateDevelopmentConfig({...publicConfig,enrollmentOrigin:'http://127.0.0.1:4377'},'http://localhost:4376/'));
 });
 test('sign-in uses official SDK functions; OTP/email stay out of public state and login grants nothing',async()=>{
   const f=fixture();await signIn(f);const state=f.controller.state();assert.equal(state.authenticated,true);assert.equal(state.selected,address);

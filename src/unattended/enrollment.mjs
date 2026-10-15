@@ -14,9 +14,9 @@ function identity(value,wallet,delegated=true){
     (delegated&&(!Number.isSafeInteger(value.delegationExpiresAt)||value.delegationExpiresAt<=Date.now()||value.delegationExpiresAt>Date.now()+86400000)))throw new PaymentError('AUTHENTICATED_ENROLLMENT_REQUIRED');
   return value;
 }
-function localOrigin(value){
+function localOrigin(value,allowLocalhost=false){
   let parsed;try{parsed=new URL(value);}catch{throw new PaymentError('LOCAL_ONBOARDING_ORIGIN_REQUIRED');}
-  if(parsed.protocol!=='http:'||parsed.hostname!=='127.0.0.1'||!parsed.port||parsed.origin!==value||parsed.username||parsed.password)throw new PaymentError('LOCAL_ONBOARDING_ORIGIN_REQUIRED');
+  if(parsed.protocol!=='http:'||!(parsed.hostname==='127.0.0.1'||allowLocalhost&&parsed.hostname==='localhost')||!parsed.port||parsed.origin!==value||parsed.username||parsed.password)throw new PaymentError('LOCAL_ONBOARDING_ORIGIN_REQUIRED');
   return value;
 }
 
@@ -106,7 +106,10 @@ export class EnrollmentAuthority {
 // payment listener. Exact Origin + JSON + bearer session, no cookies or wildcard
 // CORS. Loopback is a development trust boundary, not a public HTTPS service.
 export function createEnrollmentHttpServer({authority,onboardingOrigin}){
-  const allowed=localOrigin(onboardingOrigin);let inFlight=0;
+  // Coinbase's development allowlist requires a domain, not an IP. A configured
+  // localhost browser Origin is allowed here only; broker capabilities remain
+  // literal 127.0.0.1 endpoints and request Origin matching stays byte-exact.
+  const allowed=localOrigin(onboardingOrigin,true);let inFlight=0;
   const server=http.createServer(async(req,res)=>{
     const reply=(status,value)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
       'Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'",'Vary':'Origin',

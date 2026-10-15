@@ -3,8 +3,39 @@
 Status: **not remediated upstream; five moderate audit package entries remain**.
 Scope: this standalone browser example only. No provider login, account mutation,
 delegation, signing or payment was performed for this review. No UI/controller
-flow or SDK version was changed. The only dependency update is the compatible
-Vite security patch below, reflected in this example's lockfile.
+flow or SDK version was changed. Dependency changes are the compatible Vite
+security patch and explicit React peer installation below, both reflected in
+this example's lockfile.
+
+## Fixed missing development peer
+
+Actual browser startup failed even though the production build passed:
+`Could not resolve "react" imported by "zustand"`. The installed CDP core
+0.0.127 imports `zustand`; installed Zustand 5.0.15's `esm/index.mjs` re-exports
+`zustand/react`, whose module directly imports `react`. Zustand declares
+`react >=18.0.0` as an **optional** peer, so npm had not installed it. Production
+tree-shaking removed the unused React entrypoint; development prebundling still
+needed to resolve it. This is a real dependency failure, not provider-login
+rejection, a reason to replace Zustand, or proof that a successful build means
+the actual browser has initialized.
+
+The example now pins official stable **React 19.3.1**, which satisfies that peer,
+using `npm install --ignore-scripts`. Only one package was added. No React DOM,
+React Server Components package, SDK upgrade/downgrade, alias or override was
+introduced. Official metadata was checked before installation:
+[CDP core 0.0.127](https://registry.npmjs.org/@coinbase%2fcdp-core/0.0.127),
+[Zustand 5.0.15](https://registry.npmjs.org/zustand/5.0.15),
+[React 19.3.1](https://registry.npmjs.org/react/19.3.1).
+The current full and production audit report **no React finding** and retain the
+original five moderate package entries below. This is an observed audit result,
+not a guarantee against undiscovered vulnerabilities.
+
+New regression tests compare the manifest, lockfile and React version resolved
+from the real installed Zustand package, import Zustand's actual root module,
+and run Vite's real development dependency optimizer for CDP core and Zustand
+with a fresh temporary cache and `envDir:false`. No browser, email code,
+authentication, delegation, payment or running operator server is involved.
+Operator browser initialization and actual provider acceptance remain separate.
 
 ## Fixed development-tool finding
 
@@ -83,8 +114,9 @@ The new `test/dependency-boundaries.test.mjs` inspects a real Vite production
 graph in memory, fails if the streaming parser/Node parser enters that graph,
 checks the installed Jayson call sites, and exercises browser response parsing
 and ID generation without a network call. UUID presence is asserted explicitly.
-It does not statically prove every possible SDK call path, validate the Vite dev
-optimizer graph, or repair installed dependencies. Review again on import,
+It does not statically prove every possible SDK call path or repair the remaining
+advisory dependencies. A separate fresh dev-optimizer regression now verifies
+the previously failing CDP/Zustand/React resolution. Review again on import,
 bundler, SDK, deployment-surface or enrollment changes. No audit waiver or
 production/funded-wallet acceptance is granted by these tests.
 
@@ -96,6 +128,9 @@ npm run build
 npm audit --omit=dev
 npm audit
 npm ls @coinbase/cdp-core @solana/web3.js jayson stream-json uuid
+npm ls @coinbase/cdp-core zustand react react-dom
+npm view zustand@5.0.15 peerDependencies peerDependenciesMeta --json
+npm view react@19.3.1 version dist.integrity --json
 npm view @coinbase/cdp-core version dependencies --json
 npm view @solana/web3.js version dependencies --json
 npm view jayson@4 version --json

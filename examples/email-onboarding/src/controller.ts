@@ -14,7 +14,11 @@ export class OnboardingError extends Error {
 }
 export function validateDevelopmentConfig(config: PublicConfig, url: string) {
   const location = new URL(url);
-  if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:' || !location.port || location.username || location.password)
+  // Coinbase development-domain allowlisting requires localhost rather than an
+  // IP address. Permit only these two literal loopback frontend hosts; this does
+  // not make them interchangeable enrollment-backend origins.
+  if (!/^http:\/\/(?:localhost|127\.0\.0\.1):\d+(?:[/?#]|$)/i.test(url) ||
+      !['localhost','127.0.0.1'].includes(location.hostname) || location.protocol !== 'http:' || !location.port || location.username || location.password)
     throw new OnboardingError('LOOPBACK_DEVELOPMENT_ONLY');
   if (!['developmentConfirmed,projectId','developmentConfirmed,enrollmentOrigin,projectId'].includes(Object.keys(config).sort().join(',')) || config.developmentConfirmed !== true ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(config.projectId))

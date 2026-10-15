@@ -13,7 +13,7 @@
     "fromBlock": "0",
     "stateDir": "/absolute/private/testnet-state",
     "orderDirectory": "/absolute/private/testnet-orders",
-    "onboardingOrigin": "http://127.0.0.1:4376",
+    "onboardingOrigin": "http://localhost:4376",
     "enrollmentPort": 4377
   },
   "credentials": {

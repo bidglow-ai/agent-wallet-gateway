@@ -75,8 +75,12 @@ Plain loopback does not protect against a compromised local OS or port hijacking
 In `examples/email-onboarding`, set only its documented public project ID,
 development assertion and enrollment origin. Never prefix provider credentials
 with `VITE_`; they would become public browser code. Run its frontend explicitly
-on the exact configured `http://127.0.0.1:4376` origin. Do not use `localhost` as an
-alias: the enrollment endpoint requires the exact configured Origin/Host.
+on the exact configured `http://localhost:4376` origin. Coinbase's development
+allowlist accepts this domain but rejects IP-address entries. Vite still binds
+only `127.0.0.1`; the enrollment endpoint remains `http://127.0.0.1:4377`.
+Set `onboardingOrigin` to that same exact localhost browser origin. The two host
+spellings are not interchangeable CORS aliases: only the single configured
+Origin is accepted, including its scheme and port. No wildcard domain is added.
 
 After provider login/delegation, request the bounded proposal, review its fixed
 scope, and confirm. The restricted agent connection is returned only to that

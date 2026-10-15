@@ -1,5 +1,42 @@
 # Acceptance evidence
 
+## Real development-browser startup — October 15, NOT a funding release
+
+- Root syntax checks and **140/140 isolated tests** pass on Node 26.7.0 and
+  Node 24.13.0. The email example passes typecheck, **30/30 tests**, a fresh real
+  Vite development prebundle and its Vite 8.0.16 production build.
+- Actual CDP portal configuration rejected an IP-address allowlist entry.
+  A separate empty development project now allows only the exact
+  `http://localhost:4376` browser origin. Enrollment CORS accepts one configured
+  origin, not both hostname aliases; all backend listeners and broker
+  capabilities remain literal `127.0.0.1`. Wrong aliases, ports and spoofed
+  hosts are rejected in permanent regression tests.
+- The actual browser then exposed a missing React peer reached through the
+  SDK's Zustand root import. The prior production-only build had hidden it.
+  An exact compatible React dependency and a real fresh dev-optimizer test fix
+  this; no SDK replacement, React DOM, dependency alias or payment-permission
+  change was used. After restarting the owned local Vite process with forced
+  dependency reoptimization, the actual browser initialized the official SDK.
+- The official SDK confirmed a request for an owner email verification code.
+  Owner verification, wallet identity, delegation, provider policies and payments
+  are **not** inferred from that request. No provider API key or Wallet Secret
+  was generated in this step, and no payment or production change occurred.
+- Private operator/order JSON now additionally requires a canonical lexical
+  path and an owner-only, non-symlink direct parent directory (0700), preserving
+  opened-file 0600, owner, single-link and `O_NOFOLLOW` checks. This is not
+  ancestor-path, ACL or filesystem-race isolation. Independent scoped review
+  found no blocking regression; its 20 focused synthetic tests passed.
+- Root production dependency audit reports zero. Full and production-only
+  email-example audits still fail with **five moderate** SDK-transitive package
+  entries and no high/critical findings. These are not waived by build success.
+
+The existing native Codex acceptance below remains **synthetic**, with zero
+provider calls; no new native-provider payment acceptance is claimed. Remaining:
+actual owner email/account/delegation, protected provider setup and negative
+policy tests, a new provider-signed test-USDC payment with independent
+chain/Stripe evidence, other native clients and separately reviewed production
+security/accounting. Default startup remains read-only. **Do not fund a wallet.**
+
 ## Native Codex synthetic milestone — October 15, NOT a funding release
 
 - Root syntax checks and **132/132 isolated tests** pass on Node 26.7.0 and
