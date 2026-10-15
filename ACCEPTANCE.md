@@ -1,5 +1,40 @@
 # Acceptance evidence
 
+## Unattended development milestone — October 15, NOT a funding release
+
+- 92 root tests and syntax checks pass on Node 26.7.0 and Node 24.13.0. This
+  includes real EIP-712 signature recovery with disposable unfunded fixture keys,
+  independent mocked chain/Stripe evidence, restart/replay/revocation, immutable
+  known transactions, business-quote uniqueness and concurrent durable budgets.
+- Five SDK protocol sessions share one actual broker ledger: two 5-test-USDC
+  reservations reach the 10-test-USDC grant limit; three more are rejected before
+  signing. Three real stdio child processes connect through the authenticated
+  local HTTP adapter without developer credentials. These are not vendor-native
+  model/client payment acceptances or blockchain transfers.
+- Separate email-onboarding example: actual SDK TypeScript imports, ten mocked
+  tests and Vite build pass. Its audit reports five moderate transitive dependency
+  entries; these remain unresolved. The root dependency audit reports zero.
+- Cross-review reproduced and led to fixes for interrupted-state recovery,
+  per-call provider-policy mismatch, canonical/finalized receipt checks, known
+  transaction replacement and duplicate business-quote purchases.
+- Native macOS unlink racing was reproduced with synthetic regular owner-only
+  files: lstat may report zero links for a deleted optional SQLite sidecar. The
+  corrected guard still rejects unsafe type/owner/mode, hardlinks, symlinks and
+  a mandatory database with zero links. Child-isolated regression and repeated
+  eight-process cold-start tests pass.
+- A public historical Base Sepolia receipt was read and its official USDC event
+  ABI/finalized height checked. No new transaction, CDP signing, email sign-in,
+  delegation, production record, refund, ranking or deployment was performed.
+- Official CDP token validation/account-delegation calls and policy schema were
+  inspected against pinned SDK 1.58.0. Actual provider policy installation and
+  negative signing tests remain unverified. A compile or mocked SDK test does
+  not prove provider behavior, free-tier availability or account authorization.
+
+Remaining: authenticated bounded-mandate enrollment, completed owner development
+project setup, actual email/delegated-signer testnet acceptance, isolated merchant
+fulfillment/recovery, native clients and separately reviewed production integration.
+The default AWAL server stays read-only. Do not fund a wallet for this milestone.
+
 ## October 15 hardening
 
 - Removed the provider payment adapter and blocked direct gateway payment calls

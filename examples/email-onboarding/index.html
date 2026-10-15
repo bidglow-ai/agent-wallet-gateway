@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>Email wallet — development onboarding example</title>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Independent development example</p>
+      <h1>Your email. Your development wallet.</h1>
+      <p class="notice">Testnet only. Funding is not accepted. Do not send real assets to this wallet.</p>
+      <p>Sign in through the official Coinbase SDK. The same email in another project, including AWAL, can have a different wallet.</p>
+      <p class="notice">Backend enrollment and payment integration are not implemented. Signing in or granting delegation does not enable unattended payments.</p>
+      <p id="configuration" role="status"></p>
+      <form id="email-form" method="post" action="#">
+        <h2>1. Sign in</h2>
+        <label for="email">Your email</label>
+        <input id="email" type="email" autocomplete="email" required>
+        <button id="send-code" disabled>Send a verification code</button>
+      </form>
+      <form id="otp-form" method="post" action="#">
+        <label for="otp">Email verification code</label>
+        <input id="otp" type="password" inputmode="numeric" autocomplete="off" required disabled>
+        <button id="verify-code" disabled>Verify code</button>
+      </form>
+      <section aria-labelledby="account-heading">
+        <h2 id="account-heading">2. Choose this project's development account</h2>
+        <label for="account">Authenticated EVM account</label>
+        <select id="account" disabled><option value="">Sign in first</option></select>
+        <button id="refresh" type="button" disabled>Refresh delegation status</button>
+        <p id="delegation" role="status">No delegation status has been checked.</p>
+      </section>
+      <section aria-labelledby="delegate-heading">
+        <h2 id="delegate-heading">3. Explicitly authorize one development account</h2>
+        <p>The provider delegation is account-scoped, not restricted to testnet, USDC, a recipient or a spending budget. The separate development project and its independently verified server policies are essential. No payment tools are included.</p>
+        <label for="hours">Expires after</label>
+        <select id="hours"><option value="1">1 hour</option><option value="4">4 hours</option><option value="24">24 hours</option></select>
+        <label class="check"><input id="consent" type="checkbox">I authorize this development project to sign for the selected account until expiry. This is separate from sign-in.</label>
+        <button id="grant" type="button" disabled>Grant account-scoped delegation</button>
+        <button id="revoke" type="button" disabled>Revoke selected account's delegation</button>
+        <p>Revocation stops future delegated signing. Previously issued signatures may remain usable until their own expiration.</p>
+      </section>
+      <p id="status" role="status" aria-live="polite">Configuration required. No provider operation has been performed.</p>
+      <button id="sign-out" type="button" disabled>Sign out of this example</button>
+      <p class="footnote">Email and OTP go to Coinbase through its SDK, not an application backend. The example never logs them or stores them itself. The SDK manages its own session storage. Signing out does not revoke delegation; use the revoke button first.</p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

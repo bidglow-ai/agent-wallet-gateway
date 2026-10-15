@@ -10,6 +10,28 @@ removed; even direct gateway payment calls reject before accessing the provider
 or ledger. A successful protocol test is not native-client acceptance,
 wallet authentication, mainnet payment or merchant fulfillment.
 
+## Unattended payment development (not released for funding)
+
+New `src/unattended/` components implement a **Base Sepolia testnet-only**
+delegated signer, immutable order-bound EIP-3009 nonce, durable payer/merchant
+stores, conservative shared budget, crash reconciliation and independent
+chain/Stripe sandbox evidence checks. They are NOT mounted by `npm start` and
+cannot enable mainnet through a flag. Read [the architecture and acceptance gates](ARCHITECTURE.md).
+
+The [separate email onboarding example](examples/email-onboarding/README.md)
+lets self-hosting developers configure their own public development project and
+their users' own emails. It does not enroll users into a live payment broker.
+No actual email/delegation-provider acceptance is claimed by mocked tests or
+its successful build. It has separately documented dependency advisories.
+
+These are development modules, **not a completed autonomous payment product**.
+Do not fund a wallet to test them. The owner still needs a separate development
+CDP project, its normal login/configuration, private broker credentials, a
+verified account delegation and actual provider-negative tests. Never paste
+API keys, Wallet Secrets, email codes or private keys into a chat or GitHub.
+The supported delegated-signing route is distinct from the existing AWAL login;
+the same email does not establish the same wallet across projects/products.
+
 ## Why this exists
 
 Coinbase's official MCP installer currently advertises a runtime archive that
@@ -62,7 +84,8 @@ Requires Node 24+ with `node:sqlite`. Use a patched supported Node release.
 
 There is no mounted payment, signing, login, logout, budget-reset, grant-edit,
 funding, transfer or trading tool. Connecting an AI does not grant it those powers.
-No real payer or testnet signer is included in automated tests.
+Automated tests never use a customer's funded wallet or call a live signing or
+settlement service. The new intent tests use disposable, unfunded, in-memory keys.
 
 ## Compatibility versus acceptance
 

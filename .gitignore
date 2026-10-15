@@ -8,4 +8,6 @@ node_modules/
 state/
 policy.local.json
 coverage/
+dist/
+.agent-continuity/
 .DS_Store

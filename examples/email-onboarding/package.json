@@ -1,0 +1,15 @@
+{
+  "name": "@bidglow/email-wallet-onboarding-example",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.0.0" },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.mjs",
+    "build": "npm run typecheck && npm test && vite build"
+  },
+  "dependencies": { "@coinbase/cdp-core": "0.0.127" },
+  "devDependencies": { "typescript": "5.9.3", "vite": "8.0.13" }
+}

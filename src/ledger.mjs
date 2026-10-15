@@ -45,10 +45,16 @@ function validatePolicy(policy) {
   }
   return { allowedOrigins: [...policy.allowedOrigins].sort(), allowedPaths: [...policy.allowedPaths].sort(), expiresAt: policy.expiresAt, perCallAtomic: policy.perCallAtomic, totalAtomic: policy.totalAtomic };
 }
-function securePath(path, directory) {
-  const stat = lstatSync(path);
+function securePath(path, directory, optional = false) {
+  let stat;
+  try { stat = lstatSync(path); }
+  catch(error) { if(optional && error.code === 'ENOENT') return; throw error; }
   const expected = directory ? 0o700 : 0o600;
-  if (stat.isSymbolicLink() || !(directory ? stat.isDirectory() : stat.isFile()) || (stat.mode & 0o777) !== expected || (process.getuid && stat.uid !== process.getuid()) || (!directory && stat.nlink !== 1)) fail(`Unsafe state ${directory ? 'directory' : 'file'}: ${path}`);
+  // macOS can return metadata with nlink=0 when SQLite concurrently unlinks an
+  // optional sidecar. Still require regular type, owner and mode; hardlinks and
+  // every mandatory DB file retain the exact one-link requirement.
+  const linksSafe = stat.nlink === 1 || (optional && !directory && stat.nlink === 0);
+  if (stat.isSymbolicLink() || !(directory ? stat.isDirectory() : stat.isFile()) || (stat.mode & 0o777) !== expected || (process.getuid && stat.uid !== process.getuid()) || (!directory && !linksSafe)) fail(`Unsafe state ${directory ? 'directory' : 'file'}: ${path}`);
 }
 function pathExists(path) {
   try { lstatSync(path); return true; } catch (error) { if (error.code === 'ENOENT') return false; throw error; }
@@ -69,7 +75,7 @@ export class BudgetLedger {
       const fd = openSync(path, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600);
       closeSync(fd);
     } catch (error) { if (error.code !== 'EEXIST') throw error; }
-    for (const suffix of ['', '-wal', '-shm', '-journal']) if (pathExists(path + suffix)) securePath(path + suffix, false);
+    for (const suffix of ['', '-wal', '-shm', '-journal']) securePath(path + suffix, false, suffix !== '');
     this.db = new DatabaseSync(path);
     try {
       this.db.exec('PRAGMA busy_timeout=10000;');
@@ -97,7 +103,7 @@ export class BudgetLedger {
         if (existing && existing.value !== encoded) fail('Policy differs from the durable ledger policy; changing policy cannot reset a budget');
         if (!existing) this.db.prepare('INSERT INTO metadata(key,value) VALUES(?,?)').run('policy', encoded);
       });
-      for (const suffix of ['', '-wal', '-shm']) if (pathExists(path + suffix)) securePath(path + suffix, false);
+      for (const suffix of ['', '-wal', '-shm']) securePath(path + suffix, false, suffix !== '');
     } catch (error) { this.db.close(); throw error; }
   }
 
