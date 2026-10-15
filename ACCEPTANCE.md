@@ -1,5 +1,28 @@
 # Acceptance evidence
 
+## Actual owner email login — October 15, NOT delegated payment acceptance
+
+- The owner entered the fresh OTP in the local browser, and the official SDK
+  completed real email verification (HTTP 200) and returned one EVM account.
+  The UI showed signed-in, cleared temporary email/OTP fields and exposed no
+  broker connection. No account identifier or credential is published here.
+- A read-only delegation lookup returned **404 with generic `not_found`**,
+  not `delegation_not_found`. The UI correctly retained `unknown`; it did not
+  interpret an ambiguous error as permission to create another delegation.
+  Independent installed-SDK review confirmed the conservative error mapping.
+- The isolated project's delegated-signing prerequisite was disabled and no
+  project policy or Wallet Secret was configured. Attempting to enable only
+  that project feature prompted a fresh owner two-step/passkey verification.
+  That prompt was handed to the owner; feature enablement is not yet confirmed.
+- Real sign-in does not grant an account delegation, local spending mandate or
+  payment capability. No provider key/Wallet Secret generation, policy mutation,
+  signing, transfer, faucet request, Stripe write or production change occurred.
+
+Remaining: confirmed isolated project configuration, protected credentials,
+actual provider policy and negative tests, bounded owner delegation/mandate,
+new provider-signed test-USDC payment with independent evidence, other native
+clients and production review. The SDK advisories remain. **Do not fund a wallet.**
+
 ## Email visibility and sign-in feedback fix — October 15
 
 - Fixed a real UI bug: submitting the email and completing any action both
