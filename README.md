@@ -24,6 +24,8 @@ their users' own emails. A separately launched local development backend now
 verifies provider sessions and enrolls one immutable bounded testnet mandate.
 See [development-only operator setup](DEVELOPMENT_SETUP.md); this is not a hosted
 multi-tenant service, accepted provider flow or funded-wallet release.
+Its offline credential importer accepts protected file paths, not secret values
+in commands, and never starts the provider or payment runtime.
 No actual email/delegation-provider acceptance is claimed by mocked tests or
 its successful build. It has separately documented dependency advisories.
 

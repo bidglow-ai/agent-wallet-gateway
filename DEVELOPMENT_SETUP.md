@@ -53,6 +53,58 @@ wallet. Never fund an address on the assumption those products share it.
 Actual provider setup and negative tests have not been accepted for this new
 implementation. Do not skip those gates because an SDK schema test passed.
 
+## Import credentials without putting values in commands
+
+Use the Portal's explicit downloads, not chat, screenshots, clipboard history,
+shell arguments or `VITE_` variables. A provider security-key/2FA prompt must be
+completed by the owner. Do not repeatedly create keys after an uncertain result.
+Keep the runtime key scoped to the isolated project, without Coinbase App trade,
+transfer, receive or view access, wallet key Export, or policy Manage privileges.
+Restrict its IP allowlist to the trusted backend's actual public egress, not the
+frontend's localhost origin. Those settings still require actual API acceptance;
+the algorithm or successful import alone does not prove permission boundaries.
+Install a policy separately through the Portal rather than giving policy-edit
+credentials to the runtime or agent.
+
+Save the API-key JSON and separate Wallet Secret text file into an existing
+owner-only directory outside this checkout. Each input file must be regular,
+owned by the current user, mode 0600 and have one link; the direct parent must be
+0700 and not a symlink. Never commit these downloads. The offline helper accepts
+only explicit file paths:
+
+```sh
+node scripts/development-setup.mjs import-cdp --api-key-file /absolute/private/api-key.json --wallet-secret-file /absolute/private/wallet-secret.txt --output-file /absolute/private/cdp.json
+```
+
+It accepts exact `name/privateKey`, `id/privateKey`, or normalized
+`apiKeyId/apiKeySecret` JSON shapes. API-key values are not trimmed or rewritten;
+only the surrounding whitespace of the separate Wallet Secret text is removed.
+Unknown export shapes fail closed. Ed25519 or P-256 API-key material and the
+distinct P-256 Wallet Secret are checked locally, not authenticated with CDP.
+
+After the public operator configuration contains the actual policy ID, selected
+wallet, fixed test merchant/payee and Stripe sandbox account, combine it with the
+protected CDP file and a separate protected **test** Stripe key:
+
+```sh
+node scripts/development-setup.mjs build-operator --config-file /absolute/private/config.json --cdp-file /absolute/private/cdp.json --stripe-key-file /absolute/private/stripe-test.txt --output-file /absolute/private/operator.json
+```
+
+Start from the `config` object in `examples/unattended-operator.example.json`,
+not the whole example bundle. Do not substitute made-up account or policy IDs to
+make setup pass. Output is created exclusively as 0600 and never overwritten.
+Missing/unsafe parents, symlinks, hardlinks, non-regular files, oversized input,
+unknown fields and live Stripe keys are rejected. Both the open and actual read
+are bounded against special files/concurrent growth. The helper does not create
+state directories, start a service, initialize an SDK, authenticate, sign or pay.
+It prints only fixed status booleans or a fixed error code, never paths or values.
+Direct-parent/realpath checks are not ancestor-path, ACL or full TOCTOU isolation.
+
+An offline success still reports `providerConfigurationVerified:false`,
+`paymentInitiated:false` and `fundingAccepted:false`. Keep the raw protected
+downloads until independent provider configuration is accepted; no automatic
+deletion or credential rotation is performed.
+
 ## Local operator process
 
 Copy `examples/unattended-operator.example.json` to an absolute path **outside Git**

@@ -1,5 +1,41 @@
 # Acceptance evidence
 
+## Actual first-use delegation lookup and safe credential import — October 15
+
+- The real SDK's GET returned the documented account-scoped absence sentence
+  **without its final period**. A static-candidate comparison established that
+  exact difference without exposing raw provider diagnostics. The controller now
+  accepts only the two verified fixed literals under `404 / not_found` in its
+  GET-specific branch, retaining fresh identity/account checks. Generic 404,
+  whitespace/case variants and create/revoke failures still remain unconfirmed.
+- After this patch, the same real signed-in development browser successfully
+  displayed **Selected account delegation: none.** No consent was checked, no
+  delegation was created and no backend capability was returned. This resolves
+  the first-use lookup problem recorded below, not delegated-payment acceptance.
+- Added a separate offline path-only import/build CLI. It validates protected
+  repository-external inputs, exact key/config shapes, owner/mode/link/type and
+  bounded reads; creates output exclusively; never initializes the provider or
+  prints credentials. Independent review found and reproduced a FIFO-open hang;
+  nonblocking opens plus regression tests now reject it. The existing runtime
+  private-JSON reader also bounds actual reads if an inode grows after `fstat`.
+- Root syntax/full checks pass **153/153** on Node 26.7.0 and Node 24.13.0.
+  Frontend typecheck, **44/44 tests** and Vite production build pass. Independent
+  review reran the 16 controller tests and 19 setup/private-file tests on Node 24,
+  finding no remaining blocking issue in this scoped patch. SDK-transitive
+  moderate dependency advisories remain, not waived by these checks.
+- Prepared one runtime-key request for the isolated development project with
+  consumer Coinbase App permissions, wallet Export and policy Manage disabled,
+  Ed25519 selected and a single backend-egress IP restriction. Submission
+  prompted owner security-key verification. The browser was handed to the owner;
+  no key download or Wallet Secret import is yet confirmed. Do not retry key
+  creation blindly. Provider permission boundaries still need real acceptance.
+
+No signing, transfer, faucet request, Stripe write, production change or funding
+instruction occurred. Remaining: protected credential completion, exact provider
+policy and negative tests, bounded delegation/mandate, new provider-signed
+test-USDC payment plus independent evidence, native clients and production review.
+Default startup remains read-only. **Do not fund a wallet.**
+
 ## Delegation GET contract coverage — October 15, NOT actual delegation acceptance
 
 - Rechecked the isolated project: its delegated-signing feature is enabled, but

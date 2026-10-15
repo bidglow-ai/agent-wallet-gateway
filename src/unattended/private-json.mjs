@@ -1,4 +1,4 @@
-import {constants,openSync,closeSync,fstatSync,lstatSync,readFileSync} from 'node:fs';
+import {constants,openSync,closeSync,fstatSync,lstatSync,readSync} from 'node:fs';
 import {dirname,isAbsolute,resolve} from 'node:path';
 import {PaymentError} from './intent.mjs';
 
@@ -13,10 +13,16 @@ export function readPrivateJson(path,maxBytes=32768){
     // symlink in the direct-parent lstat. No ancestor traversal is claimed.
     const parent=lstatSync(dirname(path));
     if(parent.isSymbolicLink()||!parent.isDirectory()||(parent.mode&0o777)!==0o700||(process.getuid&&parent.uid!==process.getuid()))throw new Error();
-    fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW);
+    // Do not block opening a FIFO before its non-regular type can be rejected.
+    fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
     const stat=fstatSync(fd);
     if(!stat.isFile()||(stat.mode&0o777)!==0o600||stat.nlink!==1||(process.getuid&&stat.uid!==process.getuid())||stat.size<2||stat.size>maxBytes)throw new Error();
-    const value=JSON.parse(readFileSync(fd,'utf8'));
+    // Bound the actual read as well as the initial stat: a concurrent trusted
+    // writer may grow the inode after the size check.
+    const buffer=Buffer.alloc(maxBytes+1);let used=0;
+    while(used<buffer.length){const count=readSync(fd,buffer,used,buffer.length-used,null);if(!count)break;used+=count;}
+    if(used<2||used>maxBytes)throw new Error();
+    const value=JSON.parse(buffer.subarray(0,used).toString('utf8'));
     if(!value||Object.getPrototypeOf(value)!==Object.prototype)throw new Error();
     return value;
   }catch{throw new PaymentError('PRIVATE_OPERATOR_FILE_REQUIRED');}

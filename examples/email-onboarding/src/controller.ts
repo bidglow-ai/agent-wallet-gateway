@@ -115,7 +115,8 @@ export class OnboardingController {
       // revalidated the fresh selected account/identity. Generic 404s and the
       // create/revoke endpoints must never be interpreted as no delegation.
       const documentedAbsence=providerError?.errorType==='not_found'&&
-        providerError.errorMessage==='No active account-scoped delegation found for the specified address.';
+        (providerError.errorMessage==='No active account-scoped delegation found for the specified address.'||
+          providerError.errorMessage==='No active account-scoped delegation found for the specified address');
       if (providerError?.statusCode === 404 && (providerError.errorType === 'delegation_not_found'||documentedAbsence)) this.#delegation = { status: 'none' };
       else { this.#delegation = { status: 'unknown' }; throw new OnboardingError('DELEGATION_STATUS_UNCONFIRMED'); }
     }

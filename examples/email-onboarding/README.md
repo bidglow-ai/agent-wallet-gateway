@@ -2,8 +2,11 @@
 
 Standalone Vite + vanilla TypeScript example using official `@coinbase/cdp-core`
 **0.0.127**. This is development onboarding source, not an enrolled payment client
-or an accepted native wallet integration. No real provider authentication,
-delegation, signing or token transfer was run to verify this example.
+or an accepted native wallet integration. One isolated owner-email login and a
+read-only no-active-delegation lookup have been observed through the real SDK.
+No actual account delegation, provider signing or token transfer has been
+accepted for this implementation. See the root acceptance record for the exact
+boundary; synthetic controller tests do not establish these external results.
 
 The SDK's installed Zustand 5.x root export also imports its React entrypoint.
 Although Zustand marks React as an optional peer, Vite's development optimizer
@@ -84,8 +87,10 @@ Signing out does not revoke either mandate or delegation. Previously issued paym
 signatures may survive revocation until their own expiration.
 
 Delegation status treats only the official GET-specific 404 `not_found` with
-the exact documented account-scoped absence message (or the legacy
-`delegation_not_found` code) as no active delegation, after fresh authenticated
+one of the two exact account-scoped absence message literals (the documented
+sentence with its final period, or the SDK form without that period; no trimming,
+case-folding or fuzzy matching), or a 404 with the legacy
+`delegation_not_found` code, as no active delegation after fresh authenticated
 account checks. Generic API/HTML 404s, changed identities and provider failures
 remain unconfirmed. Create/revoke 404 or 409 responses are never mapped to
 absence or success and are not retried automatically. Reading absence never

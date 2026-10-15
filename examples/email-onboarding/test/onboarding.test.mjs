@@ -6,6 +6,7 @@ import {OnboardingController,validateDevelopmentConfig} from '../src/controller.
 const address='0x'+'1'.repeat(40),second='0x'+'2'.repeat(40);
 const publicConfig={projectId:'11111111-1111-4111-8111-111111111111',developmentConfirmed:true};
 const officialNoDelegation={statusCode:404,errorType:'not_found',errorMessage:'No active account-scoped delegation found for the specified address.'};
+const sdkNoDelegation={...officialNoDelegation,errorMessage:'No active account-scoped delegation found for the specified address'};
 function fixture(options={}){
   const calls=[];let user=options.preAuthenticated?{userId:'fixture-subject',evmAccountObjects:[{address},{address:second}]}:null;
   let authListener;
@@ -70,8 +71,9 @@ test('unknown delegation status is not absence and cannot permit a new grant',as
   const f=fixture({readFails:true});await signIn(f);await assert.rejects(f.controller.grantDelegation(1,true),/DELEGATION_STATUS_UNCONFIRMED/);
   assert.equal(f.controller.state().delegation.status,'unknown');assert.equal(f.calls.some(([method])=>method==='createDelegationForAccount'),false);
 });
-test('only official GET absence is none; reading it never grants and consent remains mandatory',async()=>{
-  const f=fixture({readError:officialNoDelegation});await signIn(f);await f.controller.refreshDelegation();
+test('only the two exact official GET absence literals are none; reading never grants and consent remains mandatory',async()=>{
+  for(const readError of [officialNoDelegation,sdkNoDelegation]){
+  const f=fixture({readError});await signIn(f);await f.controller.refreshDelegation();
   assert.equal(f.controller.state().delegation.status,'none');
   assert.equal(f.calls.some(([method])=>method==='createDelegationForAccount'),false);
   await assert.rejects(f.controller.grantDelegation(1,false),/EXPLICIT_BOUNDED_DELEGATION_REQUIRED/);
@@ -81,7 +83,8 @@ test('only official GET absence is none; reading it never grants and consent rem
   assert.equal(f.calls.filter(([method])=>method==='createDelegationForAccount').length,1);
   assert.equal(f.controller.state().fundingAccepted,false);assert.equal(f.controller.state().paymentsEnabled,false);
   assert.equal(f.controller.state().connectionAvailable,false);
-  assert.ok(!JSON.stringify(f.controller.state()).includes(officialNoDelegation.errorMessage));
+  assert.ok(!JSON.stringify(f.controller.state()).includes(readError.errorMessage));
+  }
 });
 test('generic or similar GET errors stay unknown and cannot authorize creation',async()=>{
   for(const readError of [
@@ -89,6 +92,9 @@ test('generic or similar GET errors stay unknown and cannot authorize creation',
     {...officialNoDelegation,errorMessage:'<html>404 Not Found</html>'},
     {...officialNoDelegation,errorMessage:officialNoDelegation.errorMessage+' '},
     {...officialNoDelegation,errorMessage:officialNoDelegation.errorMessage.toLowerCase()},
+    {...sdkNoDelegation,errorMessage:sdkNoDelegation.errorMessage+' '},
+    {...sdkNoDelegation,errorMessage:' '+sdkNoDelegation.errorMessage},
+    {...sdkNoDelegation,errorMessage:sdkNoDelegation.errorMessage.toLowerCase()},
     {...officialNoDelegation,errorMessage:''},
     {...officialNoDelegation,errorMessage:undefined},
     {...officialNoDelegation,statusCode:401},
@@ -124,7 +130,7 @@ test('official GET absence cannot cross a changed or no-longer-owned authenticat
   }
 });
 test('create and revoke 404/409 are unconfirmed, never GET absence or successful automatic retries',async()=>{
-  for(const error of [officialNoDelegation,{statusCode:404,errorType:'not_found',errorMessage:'End user account not found.'},{statusCode:409,errorType:'already_exists',errorMessage:'synthetic conflict'}]){
+  for(const error of [officialNoDelegation,sdkNoDelegation,{statusCode:404,errorType:'not_found',errorMessage:'End user account not found.'},{statusCode:409,errorType:'already_exists',errorMessage:'synthetic conflict'}]){
     const f=fixture({readError:officialNoDelegation,createError:error});await signIn(f);
     await assert.rejects(f.controller.grantDelegation(1,true),failure=>failure.message==='PROVIDER_OPERATION_UNCONFIRMED');
     assert.equal(f.controller.state().delegation.status,'unknown');

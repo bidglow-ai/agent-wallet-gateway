@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {chmodSync,linkSync,mkdirSync,mkdtempSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
+import {spawnSync} from 'node:child_process';
 import {readPrivateJson} from '../src/unattended/private-json.mjs';
 
 function fixture(t){
@@ -38,4 +39,29 @@ test('parent validation does not replace file inode and O_NOFOLLOW protections',
   symlinkSync(file,symlink);rejected(symlink);
   linkSync(file,hardlink);rejected(file);rmSync(hardlink);
   chmodSync(file,0o644);rejected(file);
+});
+test('a FIFO is rejected without waiting for a writer',t=>{
+  const {parent}=fixture(t),fifo=join(parent,'synthetic-fifo');
+  const created=spawnSync('mkfifo',['-m','600',fifo],{encoding:'utf8',timeout:3000});
+  assert.equal(created.status,0);
+  const moduleURL=new URL('../src/unattended/private-json.mjs',import.meta.url).href;
+  const script=`import {readPrivateJson} from ${JSON.stringify(moduleURL)};
+    try{readPrivateJson(process.argv[1]);process.exitCode=2;}
+    catch(error){if(error.code!=='PRIVATE_OPERATOR_FILE_REQUIRED')process.exitCode=3;}`;
+  const child=spawnSync(process.execPath,['--input-type=module','-e',script,fifo],{encoding:'utf8',timeout:3000});
+  assert.equal(child.error,undefined);assert.equal(child.status,0);
+  assert.equal(child.stdout,'');assert.equal(child.stderr,'');
+});
+test('actual reads stay bounded if the opened regular file grows after fstat',t=>{
+  const {file}=fixture(t),moduleURL=new URL('../src/unattended/private-json.mjs',import.meta.url).href;
+  const script=`import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';
+    import {readPrivateJson} from ${JSON.stringify(moduleURL)};
+    const original=fs.readSync;let calls=0;
+    fs.readSync=(...args)=>{if(calls++===0)fs.appendFileSync(process.argv[1],' '.repeat(4096));return original(...args);};
+    syncBuiltinESMExports();
+    try{readPrivateJson(process.argv[1],32);process.exitCode=2;}
+    catch(error){if(error.code!=='PRIVATE_OPERATOR_FILE_REQUIRED'||calls!==1)process.exitCode=3;}`;
+  const child=spawnSync(process.execPath,['--input-type=module','-e',script,file],{encoding:'utf8',timeout:3000});
+  assert.equal(child.error,undefined);assert.equal(child.status,0);
+  assert.equal(child.stdout,'');assert.equal(child.stderr,'');
 });
