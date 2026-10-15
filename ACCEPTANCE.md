@@ -1,5 +1,33 @@
 # Acceptance evidence
 
+## Delegation GET contract coverage — October 15, NOT actual delegation acceptance
+
+- Rechecked the isolated project: its delegated-signing feature is enabled, but
+  no project policy or Wallet Secret has been configured; no enrollment backend
+  is running or returning a payment capability.
+- Official account-scoped delegation GET documentation uses `404 / not_found`
+  with a fixed no-active-delegation message. The earlier local guard accepted
+  only `delegation_not_found`, missing that documented first-use response.
+  The controller now accepts the exact documented status/type/message triple
+  only in its GET-specific, identity/account-revalidated branch. It retains the
+  existing legacy code; generic/HTML 404, other messages, identity changes and
+  create/revoke errors cannot become absence or successful authorization.
+- Four new fixture groups cover the documented response, negative variants,
+  changed identities and non-retried create/revoke failures. Frontend typecheck,
+  **44/44 tests** and production build pass on Node 26.7.0; the 16 focused
+  controller tests also pass on Node 24.13.0. Independent review found no
+  permission expansion or new blocking regression.
+- A safe boolean-only comparison against the actual provider error confirmed
+  `404 / not_found`, but its message **did not match** the documented fixed
+  example. The actual lookup therefore remains `unknown`; this patch covers
+  the public contract, not a demonstrated resolution of that live response.
+  No raw provider diagnostic, session, account identity or secret is recorded.
+
+No delegation, mandate, signing or payment was performed. Existing provider
+products already support agent wallets/delegated signing; this work is an
+integration and acceptance effort, not proof that no existing wallet exists.
+Default startup remains read-only. **Do not fund a wallet.**
+
 ## Actual owner email login — October 15, NOT delegated payment acceptance
 
 - The owner entered the fresh OTP in the local browser, and the official SDK

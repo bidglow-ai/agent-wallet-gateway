@@ -5,6 +5,7 @@ import {OnboardingController,validateDevelopmentConfig} from '../src/controller.
 
 const address='0x'+'1'.repeat(40),second='0x'+'2'.repeat(40);
 const publicConfig={projectId:'11111111-1111-4111-8111-111111111111',developmentConfirmed:true};
+const officialNoDelegation={statusCode:404,errorType:'not_found',errorMessage:'No active account-scoped delegation found for the specified address.'};
 function fixture(options={}){
   const calls=[];let user=options.preAuthenticated?{userId:'fixture-subject',evmAccountObjects:[{address},{address:second}]}:null;
   let authListener;
@@ -16,9 +17,9 @@ function fixture(options={}){
     onAuthStateChange:listener=>{authListener=listener;},
     signInWithEmail:async input=>{calls.push(['signInWithEmail',input]);return {flowId:'private-fixture-flow'};},
     verifyEmailOTP:async input=>{calls.push(['verifyEmailOTP',input]);if(options.verifyFails)throw Error('private OTP must not escape');user={userId:'fixture-subject',evmAccountObjects:[{address},{address:second}]};return {user};},
-    getDelegationForAccount:async input=>{calls.push(['getDelegationForAccount',input]);await options.readGate;if(options.readFails)throw {statusCode:503,errorType:'not_found',errorMessage:'private provider content'};if(!delegation)throw {statusCode:404,errorType:'delegation_not_found'};return delegation;},
-    createDelegationForAccount:async input=>{calls.push(['createDelegationForAccount',input]);await options.createGate;if(options.createFails)throw Error('private provider content');delegation={expiresAt:options.returnedExpiry||input.expiresAt};return delegation;},
-    revokeDelegationForAccount:async input=>{calls.push(['revokeDelegationForAccount',input]);await options.revokeGate;if(options.revokeFails)throw Error('private provider content');delegation=undefined;},
+    getDelegationForAccount:async input=>{calls.push(['getDelegationForAccount',input]);await options.readGate;if(Object.hasOwn(options,'readError'))throw options.readError;if(options.readFails)throw {statusCode:503,errorType:'not_found',errorMessage:'private provider content'};if(!delegation)throw {statusCode:404,errorType:'delegation_not_found'};return delegation;},
+    createDelegationForAccount:async input=>{calls.push(['createDelegationForAccount',input]);await options.createGate;if(options.createError)throw options.createError;if(options.createFails)throw Error('private provider content');delegation={expiresAt:options.returnedExpiry||input.expiresAt};return delegation;},
+    revokeDelegationForAccount:async input=>{calls.push(['revokeDelegationForAccount',input]);await options.revokeGate;if(options.revokeError)throw options.revokeError;if(options.revokeFails)throw Error('private provider content');delegation=undefined;},
     signOut:async()=>{calls.push(['signOut']);user=null;},
   };
   const controller=new OnboardingController(sdk,options.config||publicConfig,options.url||'http://127.0.0.1:4376');
@@ -68,6 +69,72 @@ test('grant requires separate explicit consent and only supported durations up t
 test('unknown delegation status is not absence and cannot permit a new grant',async()=>{
   const f=fixture({readFails:true});await signIn(f);await assert.rejects(f.controller.grantDelegation(1,true),/DELEGATION_STATUS_UNCONFIRMED/);
   assert.equal(f.controller.state().delegation.status,'unknown');assert.equal(f.calls.some(([method])=>method==='createDelegationForAccount'),false);
+});
+test('only official GET absence is none; reading it never grants and consent remains mandatory',async()=>{
+  const f=fixture({readError:officialNoDelegation});await signIn(f);await f.controller.refreshDelegation();
+  assert.equal(f.controller.state().delegation.status,'none');
+  assert.equal(f.calls.some(([method])=>method==='createDelegationForAccount'),false);
+  await assert.rejects(f.controller.grantDelegation(1,false),/EXPLICIT_BOUNDED_DELEGATION_REQUIRED/);
+  assert.equal(f.calls.some(([method])=>method==='createDelegationForAccount'),false);
+  await f.controller.grantDelegation(1,true);
+  assert.equal(f.controller.state().delegation.status,'active');
+  assert.equal(f.calls.filter(([method])=>method==='createDelegationForAccount').length,1);
+  assert.equal(f.controller.state().fundingAccepted,false);assert.equal(f.controller.state().paymentsEnabled,false);
+  assert.equal(f.controller.state().connectionAvailable,false);
+  assert.ok(!JSON.stringify(f.controller.state()).includes(officialNoDelegation.errorMessage));
+});
+test('generic or similar GET errors stay unknown and cannot authorize creation',async()=>{
+  for(const readError of [
+    {...officialNoDelegation,errorMessage:'API not found.'},
+    {...officialNoDelegation,errorMessage:'<html>404 Not Found</html>'},
+    {...officialNoDelegation,errorMessage:officialNoDelegation.errorMessage+' '},
+    {...officialNoDelegation,errorMessage:officialNoDelegation.errorMessage.toLowerCase()},
+    {...officialNoDelegation,errorMessage:''},
+    {...officialNoDelegation,errorMessage:undefined},
+    {...officialNoDelegation,statusCode:401},
+    {...officialNoDelegation,statusCode:503},
+    {...officialNoDelegation,statusCode:'404'},
+    {...officialNoDelegation,errorType:'not_enabled'},
+    {...officialNoDelegation,errorType:'not_authorized'},
+    {statusCode:404},'<html>404 Not Found</html>',new Error('private transport failure'),null,
+  ]){
+    const f=fixture({readError});await signIn(f);
+    await assert.rejects(f.controller.refreshDelegation(),error=>error.message==='DELEGATION_STATUS_UNCONFIRMED');
+    assert.equal(f.controller.state().delegation.status,'unknown');
+    await assert.rejects(f.controller.grantDelegation(1,true),/DELEGATION_STATUS_UNCONFIRMED/);
+    assert.equal(f.calls.some(([method])=>method==='createDelegationForAccount'),false);
+  }
+});
+test('official GET absence cannot cross a changed or no-longer-owned authenticated account',async()=>{
+  const notOwned=fixture({preAuthenticated:true,readError:officialNoDelegation});await notOwned.controller.initialize();
+  notOwned.setUser({userId:'fixture-subject',evmAccountObjects:[{address:second}]});
+  await assert.rejects(notOwned.controller.refreshDelegation(),/AUTHENTICATED_ACCOUNT_CHANGED/);
+  assert.equal(notOwned.calls.some(([method])=>method==='getDelegationForAccount'),false);
+  for(const notify of [false,true]){
+    let release;const readGate=new Promise(resolve=>{release=resolve;});
+    const f=fixture({preAuthenticated:true,readError:officialNoDelegation,readGate});await f.controller.initialize();
+    const pending=f.controller.refreshDelegation();
+    for(let i=0;i<20&&!f.calls.some(([method])=>method==='getDelegationForAccount');i++)await Promise.resolve();
+    assert.ok(f.calls.some(([method])=>method==='getDelegationForAccount'));
+    const changed={userId:'different-user',evmAccountObjects:[{address:second}]};
+    if(notify)f.notifyUser(changed);else f.setUser(changed);
+    release();await assert.rejects(pending,/AUTHENTICATED_ACCOUNT_CHANGED/);
+    assert.equal(f.controller.state().selected,second);assert.equal(f.controller.state().delegation.status,'unchecked');
+    assert.equal(f.calls.some(([method])=>method==='createDelegationForAccount'),false);
+  }
+});
+test('create and revoke 404/409 are unconfirmed, never GET absence or successful automatic retries',async()=>{
+  for(const error of [officialNoDelegation,{statusCode:404,errorType:'not_found',errorMessage:'End user account not found.'},{statusCode:409,errorType:'already_exists',errorMessage:'synthetic conflict'}]){
+    const f=fixture({readError:officialNoDelegation,createError:error});await signIn(f);
+    await assert.rejects(f.controller.grantDelegation(1,true),failure=>failure.message==='PROVIDER_OPERATION_UNCONFIRMED');
+    assert.equal(f.controller.state().delegation.status,'unknown');
+    assert.equal(f.calls.filter(([method])=>method==='createDelegationForAccount').length,1);
+    assert.equal(f.controller.state().connectionAvailable,false);
+    const revoke=fixture({revokeError:error});await signIn(revoke);
+    await assert.rejects(revoke.controller.revokeDelegation(),failure=>failure.message==='PROVIDER_OPERATION_UNCONFIRMED');
+    assert.equal(revoke.controller.state().delegation.status,'unknown');
+    assert.equal(revoke.calls.filter(([method])=>method==='revokeDelegationForAccount').length,1);
+  }
 });
 test('account choice comes from signed-in account objects and switching users invalidates a pending selection',async()=>{
   const f=fixture();await signIn(f);assert.throws(()=>f.controller.selectAccount('0x'+'9'.repeat(40)),/AUTHENTICATED_ACCOUNT_REQUIRED/);

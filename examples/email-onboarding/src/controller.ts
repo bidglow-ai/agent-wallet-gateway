@@ -110,8 +110,13 @@ export class OnboardingController {
       this.#delegation = { status: expires > Date.now() ? 'active' : 'expired', expiresAt: result.expiresAt };
     } catch (error) {
       if(error instanceof OnboardingError&&error.code==='AUTHENTICATED_ACCOUNT_CHANGED')throw error;
-      const providerError = error as { statusCode?: unknown; errorType?: unknown };
-      if (providerError?.statusCode === 404 && providerError.errorType === 'delegation_not_found') this.#delegation = { status: 'none' };
+      const providerError = error as { statusCode?: unknown; errorType?: unknown; errorMessage?: unknown };
+      // GET-only official absence contract, after #boundProviderCall has
+      // revalidated the fresh selected account/identity. Generic 404s and the
+      // create/revoke endpoints must never be interpreted as no delegation.
+      const documentedAbsence=providerError?.errorType==='not_found'&&
+        providerError.errorMessage==='No active account-scoped delegation found for the specified address.';
+      if (providerError?.statusCode === 404 && (providerError.errorType === 'delegation_not_found'||documentedAbsence)) this.#delegation = { status: 'none' };
       else { this.#delegation = { status: 'unknown' }; throw new OnboardingError('DELEGATION_STATUS_UNCONFIRMED'); }
     }
   }

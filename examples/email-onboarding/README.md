@@ -83,6 +83,15 @@ stop must go through the backend's durable local stop before provider revocation
 Signing out does not revoke either mandate or delegation. Previously issued payment
 signatures may survive revocation until their own expiration.
 
+Delegation status treats only the official GET-specific 404 `not_found` with
+the exact documented account-scoped absence message (or the legacy
+`delegation_not_found` code) as no active delegation, after fresh authenticated
+account checks. Generic API/HTML 404s, changed identities and provider failures
+remain unconfirmed. Create/revoke 404 or 409 responses are never mapped to
+absence or success and are not retried automatically. Reading absence never
+grants anything; the separate consent and grant action remain required.
+See the [official GET contract](https://docs.cdp.coinbase.com/api-reference/v2/rest-api/end-user-accounts/get-account-scoped-delegation-for-end-user).
+
 Account-scoped delegation is **not** a network/token/recipient/budget cap. It
 authorizes the development project to sign for that account. Actual testnet-only
 signer policies and independently enforced budgets are separate prerequisites;
