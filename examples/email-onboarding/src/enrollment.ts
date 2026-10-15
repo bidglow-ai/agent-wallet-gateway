@@ -1,4 +1,5 @@
 // Browser-only protocol validation. No wallet/developer secret is configured here.
+import {MAX_DELEGATION_MS} from './duration-policy.ts';
 export class EnrollmentError extends Error {}
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ADDRESS=/^0x[0-9a-f]{40}$/;
@@ -23,7 +24,7 @@ function mandate(value:unknown,wallet:string,userId:string,allowExpired=false):M
     typeof g.payTo!=='string'||!ADDRESS.test(g.payTo)||/^0x0{40}$/.test(g.payTo)||
     g.network!=='eip155:84532'||g.asset!=='0x036cbd53842c5426634e7929541ec2318f3dcf7e'||
     g.perCallAtomic!=='5000000'||g.totalAtomic!=='10000000'||typeof g.expiresAt!=='number'||!Number.isSafeInteger(g.expiresAt)||
-    g.expiresAt<=0||(!allowExpired&&g.expiresAt<=Date.now())||g.expiresAt>Date.now()+86400000||typeof g.merchantOrigin!=='string')reject();
+    g.expiresAt<=0||(!allowExpired&&g.expiresAt<=Date.now())||g.expiresAt>Date.now()+MAX_DELEGATION_MS||typeof g.merchantOrigin!=='string')reject();
   let origin;try{origin=new URL(g.merchantOrigin as string);}catch{return reject();}
   if(origin.protocol!=='https:'||origin.origin!==g.merchantOrigin||origin.username||origin.password)reject();
   return Object.freeze({...g}) as Mandate;

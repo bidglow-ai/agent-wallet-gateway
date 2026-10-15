@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {OnboardingController,validateDevelopmentConfig} from '../src/controller.ts';
+import {DELEGATION_DURATION_HOURS,DEFAULT_DURATION_MS,MAX_DELEGATION_MS,isAllowedDurationMs} from '../src/duration-policy.ts';
 
 const address='0x'+'1'.repeat(40),second='0x'+'2'.repeat(40);
 const publicConfig={projectId:'11111111-1111-4111-8111-111111111111',developmentConfirmed:true};
@@ -58,14 +59,49 @@ test('code verification needs an in-memory flow and provider errors are redacted
   await f.controller.sendCode('person@fixture.invalid');await assert.rejects(f.controller.verifyCode('private'),error=>error.message==='PROVIDER_OPERATION_UNCONFIRMED'&&!JSON.stringify(error).includes('private'));
   assert.equal(f.controller.state().authenticated,false);
 });
-test('grant requires separate explicit consent and only supported durations up to24hours',async()=>{
+test('grant requires separate explicit consent and only exact supported hour durations',async()=>{
   const f=fixture();await signIn(f);
-  for(const [hours,consent] of [[24,false],[25,true],[0,true],[NaN,true],[1,'true']])await assert.rejects(f.controller.grantDelegation(hours,consent),/EXPLICIT_BOUNDED_DELEGATION_REQUIRED/);
+  for(const [hours,consent] of [[24,false],[720,false],[2160,false],[25,true],[0,true],[NaN,true],[Infinity,true],[719,true],[721,true],[2159,true],[2161,true],[1.5,true],['720',true],[1,'true']])await assert.rejects(f.controller.grantDelegation(hours,consent),/EXPLICIT_BOUNDED_DELEGATION_REQUIRED/);
   assert.equal(f.calls.filter(([method])=>method==='createDelegationForAccount').length,0);
   const before=Date.now();await f.controller.grantDelegation(24,true);const request=f.calls.find(([method])=>method==='createDelegationForAccount')[1];
   assert.equal(request.address,address);assert.ok(Date.parse(request.expiresAt)>=before+24*3600000);assert.ok(Date.parse(request.expiresAt)<=Date.now()+24*3600000);
   assert.deepEqual(Object.keys(request).sort(),['address','expiresAt']);assert.equal(f.controller.state().delegation.status,'active');
   await assert.rejects(f.controller.grantDelegation(1,true),/REVIEW_EXISTING_DELEGATION/);assert.equal(f.calls.filter(([method])=>method==='createDelegationForAccount').length,1);
+});
+test('duration policy freezes the exact choices, 30-day default and 90-day maximum',()=>{
+  assert.deepEqual(DELEGATION_DURATION_HOURS,[1,4,24,720,2160]);assert.ok(Object.isFrozen(DELEGATION_DURATION_HOURS));
+  assert.equal(DEFAULT_DURATION_MS,30*86400000);assert.equal(MAX_DELEGATION_MS,90*86400000);
+  assert.throws(()=>DELEGATION_DURATION_HOURS.push(48),TypeError);
+  for(const hours of DELEGATION_DURATION_HOURS)assert.equal(isAllowedDurationMs(hours*3600000),true);
+  for(const value of [0,-3600000,7200000,DEFAULT_DURATION_MS-1,DEFAULT_DURATION_MS+1,MAX_DELEGATION_MS+1,NaN,Infinity,'2592000000',null,undefined])assert.equal(isAllowedDurationMs(value),false);
+});
+test('every supported duration requests its exact expiry only after explicit action and consent',async t=>{
+  const now=Date.now();t.mock.method(Date,'now',()=>now);
+  for(const hours of DELEGATION_DURATION_HOURS){
+    const f=fixture({preAuthenticated:true});await f.controller.initialize();
+    assert.deepEqual(f.calls.map(([name])=>name),['initialize']);
+    await f.controller.grantDelegation(hours,true);
+    const requests=f.calls.filter(([name])=>name==='createDelegationForAccount');assert.equal(requests.length,1);
+    assert.deepEqual(requests[0][1],{address,expiresAt:new Date(now+hours*3600000).toISOString()});
+    assert.equal(f.controller.state().delegation.expiresAt,requests[0][1].expiresAt);
+    assert.equal(f.controller.state().fundingAccepted,false);assert.equal(f.controller.state().paymentsEnabled,false);
+  }
+});
+test('long-term provider shortening, extension, expired or invalid expiry is never silent success',async t=>{
+  const now=Date.now();t.mock.method(Date,'now',()=>now);
+  for(const hours of [720,2160])for(const returnedExpiry of [new Date(now+3600000).toISOString(),new Date(now+hours*3600000-1).toISOString(),new Date(now+hours*3600000+1).toISOString(),new Date(now).toISOString(),'invalid']){
+    const f=fixture({preAuthenticated:true,returnedExpiry});await f.controller.initialize();
+    await assert.rejects(f.controller.grantDelegation(hours,true),/DELEGATION_RESPONSE_REQUIRES_REVIEW/);
+    assert.equal(f.controller.state().delegation.status,'unknown');assert.equal(f.controller.state().connectionAvailable,false);
+    assert.equal(f.calls.filter(([name])=>name==='createDelegationForAccount').length,1,'never retry with a shorter duration');
+  }
+});
+test('a pre-existing shorter delegation retains its original expiry and is never renewed to the default',async()=>{
+  const expiresAt=new Date(Date.now()+3600000).toISOString();const f=fixture({preAuthenticated:true,delegation:{expiresAt}});
+  await f.controller.initialize();await f.controller.refreshDelegation();
+  await assert.rejects(f.controller.grantDelegation(DEFAULT_DURATION_MS/3600000,true),/REVIEW_EXISTING_DELEGATION/);
+  assert.equal(f.controller.state().delegation.expiresAt,expiresAt);
+  assert.equal(f.calls.some(([name])=>name==='createDelegationForAccount'),false);
 });
 test('unknown delegation status is not absence and cannot permit a new grant',async()=>{
   const f=fixture({readFails:true});await signIn(f);await assert.rejects(f.controller.grantDelegation(1,true),/DELEGATION_STATUS_UNCONFIRMED/);

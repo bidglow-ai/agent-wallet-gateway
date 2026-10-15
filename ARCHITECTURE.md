@@ -10,7 +10,9 @@ Do not patch private companion IPC, bypass wallet approvals, or import a seed.
 
 Develop a separate **testnet-only payment broker** using the documented Coinbase
 CDP user-wallet account-scoped delegated-signing API. A user signs in with their
-own email and grants a short-lived delegation once. The trusted broker, not an AI
+own email and explicitly grants a bounded delegation once. New selections default
+to 30 days, with short options and a 90-day implementation ceiling; actual provider
+acceptance of long expiries is not inferred from this setting. The trusted broker, not an AI
 client, holds project credentials. Email alone is neither authorization nor a
 guarantee of recovering a wallet created by another Coinbase product/project.
 
@@ -111,6 +113,42 @@ per-user caps through a single project policy. Domain chain, order binding and
 cumulative budgets remain trusted-broker checks, not provider-wide guarantees.
 Use a separate trusted process for a different CDP project. Never give AI clients
 the project's developer API key, Wallet Secret or policy-edit access.
+
+## Requested next profile: dedicated wallet balance as budget
+
+**Design only; not implemented or enabled by the duration change.** The owner
+wants confirmed USDC in a dedicated Agent wallet, including subsequent top-ups,
+to be its available spending authority without manually increasing a cumulative
+amount. This requires a separate versioned `wallet_balance_v1` mandate, not removal
+of the existing immutable 5/10-test-USDC profile or creation of a fresh ledger.
+The owner must still authorize the wallet, network/token, permitted operation
+and merchant scope, expiry and revocation; wallet funding is not executable
+authorization supplied by an arbitrary website or quote.
+
+- Bind a finalized block H, block hash, USDC `balanceOf` and deduplicated transfer
+  events to one durable balance snapshot. Top-up history is an auditable funds
+  record, not a second independently spendable allowance.
+- Available balance is conservatively `max(0, B_H - R_H)`, where reservations
+  remain in R_H until independent evidence proves their debit is already included
+  in H. Do not subtract all historic spending from a current balance again, or
+  double-charge a chain-settled order merely because Stripe is still pending.
+- After mandatory merchant preflight, atomically validate the trusted snapshot,
+  unchanged scope, expiry/revocation, order/quote uniqueness and available amount
+  before reserving. All agents share the same broker and persistent ledger.
+- Unknown outcomes never release reservations or trigger repayment. Advance
+  snapshots monotonically only after chain checks; exact nonce/transfer proof
+  locates an existing debit, and Stripe evidence separately gates fulfillment.
+- Top-ups, relogin, restarts, new order IDs and expiry/revocation must not reset
+  history or bypass outstanding holds. Any transition from an old grant needs an
+  explicitly authorized migration preserving that state, not a new directory.
+- Acceptance must cover concurrent spends, duplicate deposits, stale/reordered
+  snapshots, external withdrawals, chain settlement with Stripe pending, RPC
+  failures, crash/lost responses and revocation races. Stop new signing on
+  unverified outcomes. Local SQLite still cannot control a bypass signer or
+  independent host; this is not a provider-enforced wallet-wide guarantee.
+
+No real-funding instructions or balance-backed release may follow from this
+plan, a longer expiry selection, or synthetic accounting tests alone.
 
 Still required: actual provider acceptance of authenticated bounded-mandate
 enrollment and any public HTTPS transport, actual empty

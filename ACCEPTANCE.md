@@ -8,11 +8,56 @@
 | Protected CDP credentials and backend read authentication | Owner verification completed; API key and separate Wallet Secret downloaded/imported into protected local files. Actual policy/end-user GETs passed on Node 24.13.0 and 26.7.0 with explicit IPv4 process flags; signing privileges are not established by these reads. |
 | Provider project policy | Eight proposed rules installed through the Portal; independent runtime-key list/get readback matches the exact template and unique project policy. Enforcement/negative signing tests are not yet accepted. |
 | Bounded account delegation and mandate | Not yet granted/accepted for this new signer. |
+| Long-term duration selection | Local UI/operator default 30 days, optional 90 days or 1/4/24 hours; source/tests accepted, actual provider long-term approval not yet accepted. |
+| Dedicated wallet balance as AI budget | Requested future profile; design recorded, not implemented or enabled. Existing 5/10-test-USDC profile remains unchanged. |
 | Public test facilitator and Base Sepolia RPC | Read-only supported-network, SDK initialization and finalized-block checks passed; no verify/settle call. |
 | Authenticated Stripe merchant/deposit reads | Actual test-mode account/balance and preview address-list GETs passed, including exact test USDC/address scope. Per-order application preflight and PaymentIntent recording remain unaccepted. |
 | New provider-signed test-USDC payment and independent Stripe evidence | Not yet run. |
 | Native clients | Codex has isolated synthetic tool-use evidence; no native provider-payment or universal-client acceptance. |
 | Mainnet/funding | Disabled and not accepted; no deposit instructions. |
+
+## Long-term default and confirmation deadline repair — October 15
+
+- New delegation selections and the example operator profile default to 30 days,
+  with optional 90 days and retained 1/4/24-hour choices. Shared backend duration
+  checks, browser validators, signer, enrollment store, offline setup and expired
+  probe all enforce the same finite policy; a cross-layer parity test verifies
+  the independently bundled browser constants. This is not a claim of Coinbase's
+  maximum expiry or actual acceptance of a 30/90-day delegation.
+- Selecting a default never checks consent or makes a provider request. Changing
+  duration clears the checkbox. Provider expiry must equal the requested bound;
+  shortening/extension/invalid results remain unconfirmed without auto-retry.
+- Existing grants retain their original expiry, cumulative budget, reservations
+  and revocation state across relogin/restart/default changes. Single-order
+  expiry remains five minutes and confirmation challenges remain two minutes.
+  No renewal, new budget, wallet-balance profile or mainnet path was added.
+- Independent review reproduced an expired-confirmation race: slow authentication
+  could cross the original challenge deadline before grant persistence. Fixed
+  rechecks after authentication, immediately before enrollment, and after awaited
+  activation before returning a capability. Late activation does not erase or
+  reset an already persisted grant/ledger. Independent replay of the slow-auth
+  case now rejects with zero enrollment/activation; synthetic late-activation
+  tests retain an existing five-test-USDC unknown hold and the original grant.
+- Final root syntax/full checks pass **187/187** on Node 26.7.0 and 24.13.0;
+  browser typecheck, **52/52** tests and Vite production build pass. Independent
+  review reran 37 repair-related focused tests on each Node version and found
+  no remaining blocker in this scoped patch. These are fixture/code results,
+  not provider delegation, enforcement, settlement or native-payment evidence.
+- A separate `gpt-6-astra` static review of the supplied public patch also found
+  no blocking issue. It ran no tools/tests and did not review unshown surrounding
+  implementation; it is supporting cross-model review, not provider acceptance.
+- In the local development instance only, a read-only registry query confirmed
+  no mandate was enrolled before preparing a new protected 30-day operator
+  configuration. It reuses the exact existing state/order directories, not a new
+  ledger, and starts only the local enrollment listener. A plain unauthenticated
+  GET of the served frontend confirms its 30-day selection, unchecked consent
+  and funding/provider-approval warnings. No browser takeover, account delegation,
+  provider signature, transfer, faucet, Stripe write or production change occurred.
+
+The requested balance-as-budget mode has a separate design in
+`ARCHITECTURE.md`; a deposit does not lift the current cumulative test allowance.
+Actual owner long-term consent and provider approval remain pending. **Do not
+fund a wallet.**
 
 ## Finite expired-policy probe — October 15, NOT provider execution acceptance
 

@@ -1,5 +1,6 @@
 import {CdpClient} from '@coinbase/cdp-sdk';
 import {AUTH_TYPES,TOKEN,PaymentError,validateGrant,paymentTypedData,paymentPayload} from './intent.mjs';
+import {isBoundedDelegationExpiry} from './duration-policy.mjs';
 let configured=false;
 
 // Reviewed public SDK only: no private AWAL IPC or raw signing tool for agents.
@@ -57,7 +58,7 @@ export class CdpDelegatedSigner {
     try{
       const delegation=await this.#client.endUser.getDelegationForEndUserAccount({userId:subject.userId,address:subject.wallet});
       const expiresAt=Date.parse(delegation?.expiresAt),now=Date.now();
-      if(!Number.isSafeInteger(expiresAt)||expiresAt<=now||expiresAt>now+86400000)throw new PaymentError('AUTHENTICATED_ENROLLMENT_REQUIRED');
+      if(!isBoundedDelegationExpiry(expiresAt,now))throw new PaymentError('AUTHENTICATED_ENROLLMENT_REQUIRED');
       return Object.freeze({...subject,delegationExpiresAt:expiresAt});
     }catch(error){if(error instanceof PaymentError)throw error;throw new PaymentError('AUTHENTICATED_ENROLLMENT_UNCONFIRMED');}
   }
@@ -73,7 +74,7 @@ export class CdpDelegatedSigner {
       const account=user?.evmAccountObjects?.find(a=>a.address?.toLowerCase()===g.wallet);
       if(user?.userId!==g.userId||!account||account.ejectedAt||account.exportedAt)throw new PaymentError('PROVIDER_WALLET_UNVERIFIED');
       const until=Date.parse(delegation?.expiresAt);
-      if(!Number.isSafeInteger(until)||until<=Date.now()||until<order.expiresAt||until>now+86400000)throw new PaymentError('DELEGATION_EXPIRED_OR_UNBOUNDED');
+      if(!isBoundedDelegationExpiry(until,now)||until<=Date.now()||until<order.expiresAt)throw new PaymentError('DELEGATION_EXPIRED_OR_UNBOUNDED');
       const expected=providerPolicy(g);
       if(policy?.id!==this.#policyId||policy.scope!=='project'||stable(policy.rules)!==stable(expected.rules)||
         projectPolicies?.nextPageToken||projectPolicies?.pageToken||projectPolicies?.policies?.length!==1||

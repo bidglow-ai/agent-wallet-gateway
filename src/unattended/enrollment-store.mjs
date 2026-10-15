@@ -3,6 +3,7 @@ import { constants, closeSync, lstatSync, mkdirSync, openSync, readdirSync } fro
 import { join, resolve } from 'node:path';
 import { canonical, PaymentError, validateGrant } from './intent.mjs';
 import { PaymentStore } from './store.mjs';
+import { isBoundedDelegationExpiry } from './duration-policy.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ADDRESS = /^0x[0-9a-f]{40}$/;
@@ -148,7 +149,7 @@ export class EnrollmentStore {
   enroll(verifiedIdentity, serverProposedGrant) {
     const identity = plain(verifiedIdentity, ['userId', 'wallet', 'delegationExpiresAt'], 'AUTHENTICATED_ENROLLMENT_REQUIRED');
     const now = Date.now();
-    if (typeof identity.userId !== 'string' || !UUID.test(identity.userId) || identity.wallet !== this.#config.expectedWallet || !Number.isSafeInteger(identity.delegationExpiresAt) || identity.delegationExpiresAt <= now || identity.delegationExpiresAt > now + 86400000) fail('AUTHENTICATED_ENROLLMENT_REQUIRED');
+    if (typeof identity.userId !== 'string' || !UUID.test(identity.userId) || identity.wallet !== this.#config.expectedWallet || !isBoundedDelegationExpiry(identity.delegationExpiresAt,now)) fail('AUTHENTICATED_ENROLLMENT_REQUIRED');
     let proposed;
     try { proposed = validateGrant(serverProposedGrant); } catch { fail('ENROLLMENT_GRANT_MISMATCH'); }
     if (proposed.userId !== identity.userId || proposed.wallet !== identity.wallet || proposed.expiresAt <= now || proposed.expiresAt > identity.delegationExpiresAt) fail('ENROLLMENT_GRANT_MISMATCH');

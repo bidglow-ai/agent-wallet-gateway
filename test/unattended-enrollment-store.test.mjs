@@ -9,6 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { EnrollmentStore } from '../src/unattended/enrollment-store.mjs';
 import { PaymentStore } from '../src/unattended/store.mjs';
 import { NETWORK, TOKEN } from '../src/unattended/intent.mjs';
+import { DEFAULT_DURATION_MS, MAX_DELEGATION_MS } from '../src/unattended/duration-policy.mjs';
 
 const code = expected => error => error.code === expected && error.message === expected;
 function data() {
@@ -64,6 +65,36 @@ test('relogin and restart preserve unknown reservations, ids, expiry and the tot
     assert.equal(reopened.summary().remainingAtomic, '0');
   } finally { reopened.close(); }
 });
+test('30/90day mandates retain reservations, expiry and the same10USDC aggregate budget across restart',t=>{
+  for(const durationMs of [DEFAULT_DURATION_MS,MAX_DELEGATION_MS]){
+    const f=fixture(t),now=Date.now();f.identity.delegationExpiresAt=now+durationMs;f.grant.expiresAt=now+durationMs;
+    const enrolled=f.store.enroll(f.identity,f.grant),payer=new PaymentStore(enrolled.budgetStateDir,enrolled.grant),first=order(f.grant);
+    payer.reserve(first);payer.transition(first.id,'reserved','unknown');payer.close();
+    const restarted=f.reopen().enroll({...f.identity,delegationExpiresAt:Date.now()+MAX_DELEGATION_MS},f.grant);
+    assert.equal(restarted.created,false);assert.deepEqual(restarted.grant,enrolled.grant);
+    const reopened=new PaymentStore(restarted.budgetStateDir,restarted.grant);
+    try{
+      assert.equal(reopened.summary().remainingAtomic,'5000000');assert.equal(reopened.get(first.id).state,'unknown');
+      assert.throws(()=>f.store.enroll({...f.identity,delegationExpiresAt:Date.now()+MAX_DELEGATION_MS},{...f.grant,expiresAt:f.grant.expiresAt+1}),code('ENROLLMENT_GRANT_MISMATCH'));
+      assert.equal(reopened.summary().remainingAtomic,'5000000');reopened.reserve(order(f.grant));assert.equal(reopened.summary().remainingAtomic,'0');
+      assert.throws(()=>reopened.reserve(order(f.grant)));assert.equal(reopened.summary().remainingAtomic,'0');
+    }finally{reopened.close();}
+  }
+});
+test('30/90day expiry and revocation still stop payments and cannot renew the persisted mandate',t=>{
+  let now=Date.now();t.mock.method(Date,'now',()=>now);
+  for(const durationMs of [DEFAULT_DURATION_MS,MAX_DELEGATION_MS])for(const revoked of [false,true]){
+    const f=fixture(t);f.identity.delegationExpiresAt=now+durationMs;f.grant.expiresAt=now+durationMs;
+    f.store.enroll(f.identity,f.grant);const payer=new PaymentStore(f.store.budgetStateDir,f.grant);
+    try{
+      if(revoked){payer.revoke();assert.throws(()=>payer.assertActive(),code('GRANT_REVOKED'));
+        assert.throws(()=>f.store.enroll(f.identity,f.grant),code('ENROLLMENT_REVOKED'));}
+      const before=now;now=f.grant.expiresAt+1;assert.deepEqual(f.reopen().get(),f.grant);
+      assert.throws(()=>payer.assertActive(),code(revoked?'GRANT_REVOKED':'GRANT_EXPIRED'));
+      assert.throws(()=>f.store.enroll({...f.identity,delegationExpiresAt:now+durationMs},f.grant),code('ENROLLMENT_GRANT_MISMATCH'));now=before;
+    }finally{payer.close();}
+  }
+});
 
 test('changed UUID, subject, expiry, limits or merchant cannot replace an existing mandate', t => {
   const f = fixture(t); f.store.enroll(f.identity, f.grant);
@@ -82,7 +113,7 @@ test('invalid trusted configuration and changed project or fixed wallet are reje
 
 test('identity and mandate validation happen before writing pending enrollment or creating a payer ledger', t => {
   const f = fixture(t);
-  for (const identity of [{ ...f.identity, email: 'synthetic@example.invalid' }, { ...f.identity, wallet: f.grant.payTo }, { ...f.identity, userId: randomUUID() }, { ...f.identity, delegationExpiresAt: Date.now() - 1 }, { ...f.identity, delegationExpiresAt: Date.now() + 86401000 }, { ...f.identity, delegationExpiresAt: f.grant.expiresAt - 1 }]) assert.throws(() => f.store.enroll(identity, f.grant));
+  for (const identity of [{ ...f.identity, email: 'synthetic@example.invalid' }, { ...f.identity, wallet: f.grant.payTo }, { ...f.identity, userId: randomUUID() }, { ...f.identity, delegationExpiresAt: Date.now() - 1 }, { ...f.identity, delegationExpiresAt: Date.now() + MAX_DELEGATION_MS + 1000 }, { ...f.identity, delegationExpiresAt: f.grant.expiresAt - 1 }]) assert.throws(() => f.store.enroll(identity, f.grant));
   assert.throws(() => f.store.enroll({ ...f.identity, get wallet() { throw new Error('getter must not run'); } }, f.grant), code('AUTHENTICATED_ENROLLMENT_REQUIRED'));
   assert.throws(() => f.store.enroll(f.identity, { ...f.grant, network: 'eip155:8453' }), code('ENROLLMENT_GRANT_MISMATCH'));
   assert.throws(() => f.store.enroll(f.identity, { ...f.grant, totalAtomic: '10000001' }), code('ENROLLMENT_GRANT_MISMATCH'));

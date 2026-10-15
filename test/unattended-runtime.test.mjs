@@ -11,6 +11,7 @@ import {readPrivateJson} from '../src/unattended/private-json.mjs';
 import {paymentTypedData,orderNonce,PaymentError} from '../src/unattended/intent.mjs';
 import {BrokerHttpClient} from '../src/unattended/http.mjs';
 import {EnrollmentStore} from '../src/unattended/enrollment-store.mjs';
+import {DELEGATION_DURATION_HOURS,DEFAULT_DURATION_MS,MAX_DELEGATION_MS} from '../src/unattended/duration-policy.mjs';
 function directory(t){const path=mkdtempSync(join(tmpdir(),'enrollment-runtime-'));t.after(()=>rmSync(path,{recursive:true,force:true}));return path;}
 function configFor(dir,f,port=4377){return {developmentProjectConfirmed:true,projectId:randomUUID(),expectedWallet:f.grant.wallet,payTo:f.grant.payTo,
   merchantOrigin:f.grant.merchantOrigin,perCallAtomic:'5000000',totalAtomic:'10000000',durationMs:3600000,policyId:'policy_test',merchantAccount:f.order.merchantAccount,
@@ -19,9 +20,11 @@ async function freePort(){const s=createServer();await new Promise(resolve=>s.li
 test('operator configuration rejects mainnet/live keys, public listener and ambiguous private paths',t=>{
   const dir=directory(t),f=fixture(),config=configFor(dir,f);
   assert.equal(validateOperatorConfig(config).developmentProjectConfirmed,true);
+  for(const hours of DELEGATION_DURATION_HOURS)assert.equal(validateOperatorConfig({...config,durationMs:hours*3600000}).durationMs,hours*3600000);
   assert.equal(validateOperatorConfig({...config,onboardingOrigin:'http://localhost:4376'}).onboardingOrigin,'http://localhost:4376');
   for(const changed of [{developmentProjectConfirmed:false},{network:'eip155:8453'},{perCallAtomic:'5000001'},{totalAtomic:'10000001'},
-    {onboardingOrigin:'https://bidglow.ai'},{stateDir:'relative'},{orderDirectory:config.stateDir},{durationMs:172800000},{enrollmentPort:80}])assert.throws(()=>validateOperatorConfig({...config,...changed}));
+    {onboardingOrigin:'https://bidglow.ai'},{stateDir:'relative'},{orderDirectory:config.stateDir},{durationMs:172800000},
+    ...[MAX_DELEGATION_MS+1,Infinity,NaN,String(DEFAULT_DURATION_MS),null].map(durationMs=>({durationMs})),{enrollmentPort:80}])assert.throws(()=>validateOperatorConfig({...config,...changed}));
   for(const onboardingOrigin of ['http://localhost.evil.example:4376','http://www.localhost:4376','http://localhost.:4376','http://127.0.0.2:4376','http://0.0.0.0:4376','http://[::1]:4376',
     'https://localhost:4376','http://localhost','http://localhost:80','http://localhost:4377','http://user@localhost:4376','http://localhost:4376/','http://localhost:4376?x=1','http://localhost:4376#x','http://2130706433:4376','http://127.1:4376'])
     assert.throws(()=>validateOperatorConfig({...config,onboardingOrigin}),{code:'LOCAL_ONBOARDING_ORIGIN_REQUIRED'});
@@ -42,7 +45,7 @@ test('private order source pins full grant/account and refuses client paths or m
   assert.equal(provider.get(f.order.id).id,f.order.id);assert.throws(()=>provider.get('../private'));
   writeFileSync(path,JSON.stringify({...f.order,merchantAccount:'acct_otheraccount'}));assert.throws(()=>provider.get(f.order.id),{code:'AUTHENTICATED_ORDER_REQUIRED'});
 });
-test('actual local enrollment -> restricted broker -> fixture payment -> restart preserves one budget and revocation',async t=>{
+test('actual local enrollment -> fixture payment -> restart with30day default preserves original1hour grant, budget and revocation',async t=>{
   const dir=directory(t),f=fixture(),port=await freePort(),config={...configFor(dir,f,port),onboardingOrigin:'http://localhost:4376'};let signs=0,settles=0,revokeFails=false,loseNext=false;
   const settled=new Map();
   const dependencies={
@@ -69,6 +72,7 @@ test('actual local enrollment -> restricted broker -> fixture payment -> restart
   let client=new BrokerHttpClient({origin:enrolled.body.agentConnection.brokerOrigin,clientToken:enrolled.body.agentConnection.clientToken});
   assert.equal((await client.pay({id:order.id})).state,'confirmed');assert.equal(signs,1);assert.equal(settles,1);
   await runtime.close();runtime=null;
+  config.durationMs=DEFAULT_DURATION_MS;
   runtime=await startDevelopmentRuntime({config,dependencies});
   p=await request('proposal',{wallet:config.expectedWallet});assert.equal(p.body.existing,true);assert.deepEqual(p.body.grant,grant);
   enrolled=await request('confirm',{wallet:config.expectedWallet,nonce:p.body.nonce,approved:true});assert.equal(enrolled.status,200);

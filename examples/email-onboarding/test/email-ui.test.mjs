@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import {OnboardingController,OnboardingError} from '../src/controller.ts';
+import {DEFAULT_DURATION_MS,DELEGATION_DURATION_HOURS} from '../src/duration-policy.ts';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const source=readFileSync(new URL('../src/main.ts',import.meta.url),'utf8');
@@ -30,7 +31,9 @@ async function fixture(options={}){
     const element=new Element();element.disabled=/\bdisabled\b/.test(match[2]);
     element.readOnly=/\breadonly\b/.test(match[2]);elements.set(match[3],element);
   }
-  elements.get('hours').value='1';
+  const selected=html.match(/<select id="hours"[^>]*>([\s\S]*?)<\/select>/)[1].match(/<option value="([^"]+)" selected>/);
+  assert.ok(selected,'the actual HTML must explicitly select its default duration');
+  elements.get('hours').value=selected[1];
   const calls=[];let currentUser=null,listener,controller,request=0;
   const sdk={
     initialize:async config=>{calls.push(['initialize',config]);},getCurrentUser:async()=>currentUser,
@@ -79,6 +82,21 @@ function noAuthority(f){
   assert.equal(f.calls.some(([name])=>!['initialize','send','verify','signOut'].includes(name)),false);
   const state=JSON.stringify(f.controller.state());assert.doesNotMatch(state,/person@fixture|synthetic-code|synthetic-flow|private provider/);
 }
+
+test('30-day HTML default and duration changes never authorize or invoke provider delegation',async()=>{
+  const choices=[...html.match(/<select id="hours"[^>]*>([\s\S]*?)<\/select>/)[1].matchAll(/<option value="([^"]+)"/g)].map(match=>Number(match[1]));
+  assert.deepEqual(choices.sort((a,b)=>a-b),[...DELEGATION_DURATION_HOURS]);
+  assert.match(html,/Long-term — 30 days \(default\)/);assert.match(html,/not authorization or automatic renewal/);
+  assert.match(html,/Provider approval of long-term durations still requires actual acceptance testing/);
+  assert.match(html,/Existing grants retain their original expiry and cumulative budget/);
+  assert.doesNotMatch(html,/<input[^>]*type="checkbox"[^>]*\bchecked\b/);
+  const f=await fixture();assert.equal(Number(f.el('hours').value)*3600000,DEFAULT_DURATION_MS);
+  assert.deepEqual(f.calls.map(([name])=>name),['initialize']);assert.equal(f.el('consent').checked,false);
+  send(f);await flush();verify(f);await flush();assert.equal(f.el('grant').disabled,true);
+  f.el('consent').checked=true;f.el('consent').emit('change');assert.equal(f.el('grant').disabled,false);
+  f.el('hours').value='2160';f.el('hours').emit('change');
+  assert.equal(f.el('consent').checked,false);assert.equal(f.el('grant').disabled,true);noAuthority(f);
+});
 
 test('sending keeps the email visible, blocks double submit and ignores unchanged signed-out notifications',async()=>{
   const gate=deferred(),f=await fixture({sendGate:gate});

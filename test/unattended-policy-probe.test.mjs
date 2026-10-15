@@ -7,6 +7,7 @@ import {runExpiredPolicyProbe} from '../src/unattended/policy-probe.mjs';
 import {policyProbeArguments} from '../scripts/provider-policy-probe.mjs';
 import {providerPolicy} from '../src/unattended/cdp-signer.mjs';
 import {fixture} from './helpers/unattended.mjs';
+import {DEFAULT_DURATION_MS,MAX_DELEGATION_MS} from '../src/unattended/duration-policy.mjs';
 
 // The public SDK root does not export APIError. This explicit fixture mirrors
 // its inspected Error subclass/own-data contract; it is NOT a real API response.
@@ -47,6 +48,18 @@ test('fixed finite mocked provider suite recovers expired control and classifies
   assert.equal(f.calls[4].typedData.primaryType,'ExpiredProbeAuthorization');
   assert.deepEqual(Object.keys(f.calls[4].typedData.types),['ExpiredProbeAuthorization']);
 });
+test('local probe permits30/90day delegations but produces only forever-expired controls',async()=>{
+  const now=Date.now();
+  for(const durationMs of [DEFAULT_DURATION_MS,MAX_DELEGATION_MS]){
+    const f=setup();f.client.endUser.getDelegationForEndUserAccount=async()=>({expiresAt:new Date(now+durationMs).toISOString()});
+    assert.equal((await runExpiredPolicyProbe({...f,clock:()=>now})).status,'PASSED');
+    assert.equal(f.calls.length,5);assert.ok(f.calls.every(call=>call.typedData.message.validBefore==='1'));
+  }
+  for(const expiresAt of [new Date(now+MAX_DELEGATION_MS+1).toISOString(),'Infinity','not-a-date']){
+    const f=setup();f.client.endUser.getDelegationForEndUserAccount=async()=>({expiresAt});
+    assert.equal((await runExpiredPolicyProbe({...f,clock:()=>now})).category,'PRECONDITIONS_UNVERIFIED');assert.equal(f.calls.length,0);
+  }
+});
 test('positive provider refusal, expired-control refusal or wrong recovery is inconclusive, not policy proof',async()=>{
   for(const behavior of [async()=>{throw Object.assign(new Error('secret'),{errorType:'policy_violation'});},
     async()=>{throw Object.assign(new Error('secret'),{errorType:'invalid_request'});},
@@ -58,7 +71,7 @@ test('positive provider refusal, expired-control refusal or wrong recovery is in
 test('missing, expired, overlong, exported or wrong-account delegation gates before all signing',async()=>{
   for(const alter of [f=>{f.client.endUser.getDelegationForEndUserAccount=async()=>null;},
     f=>{f.client.endUser.getDelegationForEndUserAccount=async()=>({expiresAt:new Date(Date.now()-1).toISOString()});},
-    f=>{f.client.endUser.getDelegationForEndUserAccount=async()=>({expiresAt:new Date(Date.now()+172800000).toISOString()});},
+    f=>{f.client.endUser.getDelegationForEndUserAccount=async()=>({expiresAt:new Date(Date.now()+MAX_DELEGATION_MS+3600000).toISOString()});},
     f=>{f.client.endUser.getEndUser=async()=>({userId:f.evidence.userId,evmAccountObjects:[{address:f.evidence.wallet,exportedAt:'2026-01-01'}]});},
     f=>{f.client.endUser.getEndUser=async()=>({userId:randomUUID(),evmAccountObjects:[{address:f.evidence.wallet}]});},
     f=>{f.client.endUser.getEndUser=async()=>({userId:f.evidence.userId,evmAccountObjects:[{address:f.evidence.wallet},{address:f.evidence.payTo}]});}]){

@@ -14,6 +14,7 @@ import {createCdpSigner} from './cdp-signer.mjs';
 import {createTestnetMerchant} from './merchant.mjs';
 import {ChainStripeVerifier} from './chain-stripe-verifier.mjs';
 import {readPrivateJson} from './private-json.mjs';
+import {isAllowedDurationMs} from './duration-policy.mjs';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const REPOSITORY=realpathSync(fileURLToPath(new URL('../../',import.meta.url)));
 const KEYS=['developmentProjectConfirmed','projectId','expectedWallet','payTo','merchantOrigin','perCallAtomic','totalAtomic','durationMs','policyId','merchantAccount','fromBlock','stateDir','orderDirectory','onboardingOrigin','enrollmentPort'];
@@ -27,7 +28,7 @@ function privateDirectory(path){
 export function validateOperatorConfig(input){
   strict(input,KEYS);
   if(input.developmentProjectConfirmed!==true||!UUID.test(input.projectId)||!Number.isInteger(input.enrollmentPort)||input.enrollmentPort<1024||input.enrollmentPort>65535||
-    ![3600000,14400000,86400000].includes(input.durationMs)||!/^acct_[A-Za-z0-9]{8,100}$/.test(input.merchantAccount)||
+    !isAllowedDurationMs(input.durationMs)||!/^acct_[A-Za-z0-9]{8,100}$/.test(input.merchantAccount)||
     !/^[A-Za-z0-9_-]{1,100}$/.test(input.policyId)||typeof input.fromBlock!=='string'||!/^(0|[1-9][0-9]{0,15})$/.test(input.fromBlock))throw new PaymentError('INVALID_OPERATOR_CONFIGURATION');
   for(const path of [input.stateDir,input.orderDirectory])if(typeof path!=='string'||!isAbsolute(path)||resolve(path)!==path)throw new PaymentError('PRIVATE_STATE_DIRECTORY_REQUIRED');
   if(input.orderDirectory===input.stateDir||input.orderDirectory.startsWith(input.stateDir+'/')||input.stateDir.startsWith(input.orderDirectory+'/'))throw new PaymentError('SEPARATE_ORDER_DIRECTORY_REQUIRED');

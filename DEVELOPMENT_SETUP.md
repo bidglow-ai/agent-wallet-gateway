@@ -8,11 +8,25 @@ native-client payment success is established by the fixture tests below.
 ## What is now implemented
 
 The local example lets the owner sign in with their own email through Coinbase,
-select an empty EVM account, and grant a short account delegation. The backend
+select an empty EVM account, and choose a bounded account delegation. The backend
 independently validates the session and account through the official provider.
 It then proposes a frozen mandate: one testnet merchant/payee, at most 5 test USDC
 per payment, 10 test USDC for the entire mandate, and a bounded expiry. The owner
 confirms this mandate **once**, not for every subsequent authorized payment.
+
+The default selection for a new delegation and the example operator profile is
+**30 days**. Options are 1, 4 or 24 hours, 30 days and 90 days; 90 days is this
+implementation's finite upper bound, not a claim about Coinbase's maximum.
+The default does not check consent, make a provider request or authorize spending.
+Provider approval of a long expiry remains a separate real acceptance gate. A
+shortened or otherwise mismatched provider result is unconfirmed, never silently
+accepted or automatically retried with another duration.
+
+Existing mandates keep their exact original expiry and spent/reserved allowance.
+Changing a default or operator duration cannot extend them, create a fresh budget,
+auto-renew, or restore a revoked mandate. The active broker mandate ends at the
+earlier of its fixed provider delegation and operator duration. Individual orders
+still last at most five minutes, and confirmation challenges at most two minutes.
 
 One restricted broker capability can be used by compatible local MCP adapters.
 All adapters share one persisted payer ledger. A second login, agent, session or
@@ -161,6 +175,11 @@ The server binds only `127.0.0.1`. Keep it local: no reverse proxy, tunnel,
 container public bind, public domain or production deployment is supported.
 Plain loopback does not protect against a compromised local OS or port hijacking.
 
+A longer authorization is not an always-on hosting service. The trusted backend
+must remain available; current restart handling still rotates its scoped client
+connection and preserves the original grant and budget. No automatic process
+supervisor, unattended connection reissue or mandate renewal is installed here.
+
 In `examples/email-onboarding`, set only its documented public project ID,
 development assertion and enrollment origin. Never prefix provider credentials
 with `VITE_`; they would become public browser code. Run its frontend explicitly
@@ -244,6 +263,14 @@ never initializes a facilitator. Reconciliation may record matching existing
 testnet settlement in Stripe sandbox, but never sends funds again.
 
 ## Failure behavior and remaining gates
+
+- Requested future profile: a dedicated wallet's confirmed USDC balance should
+  determine the AI's available budget, including later top-ups. This is **not
+  implemented or enabled** by extending the duration. The current development
+  profile remains 5 test USDC per payment / 10 test USDC cumulative. Do not fund
+  it expecting a deposit to raise those limits. Balance-backed authorization
+  requires separately reviewed chain-balance accounting, shared reservations,
+  unknown-outcome reconciliation, revocation and scope controls before release.
 
 - Every new payment requires a fresh, mandatory read-only merchant preflight.
   It checks the expected Stripe account, sandbox balance, active crypto

@@ -1,6 +1,7 @@
 import type * as Coinbase from '@coinbase/cdp-core';
 import {EnrollmentError,enrollmentOrigin,enrollmentRequest,validateProposal,validateConfirmation,validateRevocation,validateRecovery} from './enrollment.ts';
 import type {Proposal,Mandate,AgentConnection} from './enrollment.ts';
+import {isAllowedDurationMs} from './duration-policy.ts';
 
 export type OnboardingSdk = Pick<typeof Coinbase,
   'initialize' | 'getCurrentUser' | 'signInWithEmail' | 'verifyEmailOTP' |
@@ -186,7 +187,7 @@ export class OnboardingController {
   }
   async grantDelegation(hours: number, explicitConsent: boolean) {
     return this.#exclusive(async () => {
-      if (explicitConsent !== true || ![1, 4, 24].includes(hours)) throw new OnboardingError('EXPLICIT_BOUNDED_DELEGATION_REQUIRED');
+      if (explicitConsent !== true || typeof hours !== 'number' || !isAllowedDurationMs(hours * 3_600_000)) throw new OnboardingError('EXPLICIT_BOUNDED_DELEGATION_REQUIRED');
       const address = await this.#currentAccount();
       await this.#readDelegation(address);
       if (!['none', 'expired', 'revoked'].includes(this.#delegation.status)) throw new OnboardingError('REVIEW_EXISTING_DELEGATION');
@@ -194,7 +195,7 @@ export class OnboardingController {
       this.#delegation = { status: 'unknown' };
       const result = await this.#boundProviderCall(address,()=>this.#sdk.createDelegationForAccount({ address, expiresAt }));
       const expires = Date.parse(result.expiresAt);
-      if (!Number.isFinite(expires) || expires <= Date.now() || expires > Date.parse(expiresAt)) throw new OnboardingError('DELEGATION_RESPONSE_REQUIRES_REVIEW');
+      if (!Number.isFinite(expires) || expires <= Date.now() || expires !== Date.parse(expiresAt)) throw new OnboardingError('DELEGATION_RESPONSE_REQUIRES_REVIEW');
       this.#delegation = { status: 'active', expiresAt: result.expiresAt };
     });
   }

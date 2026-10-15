@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {CdpDelegatedSigner,createCdpSigner,providerPolicy} from '../src/unattended/cdp-signer.mjs';
 import {fixture} from './helpers/unattended.mjs';
 import {paymentPayload} from '../src/unattended/intent.mjs';
+import {DEFAULT_DURATION_MS,MAX_DELEGATION_MS} from '../src/unattended/duration-policy.mjs';
 const {CreatePolicyBodySchema}=await import(new URL('./policies/types.js',import.meta.resolve('@coinbase/cdp-sdk')));
 function setup(){
   const f=fixture(),calls=[],policy={id:'policy_test',...providerPolicy(f.grant)};
@@ -28,10 +29,25 @@ test('mock official delegate adapter signs only reconstructed bounded testnet da
   assert.equal(f.calls[0].typedData.message.value,'5000000');
   await paymentPayload(f.order,f.grant,signature);
 });
+test('30/90day provider delegations pass local guards while every signed order remains short-lived',async t=>{
+  const now=Date.now();t.mock.method(Date,'now',()=>now);
+  for(const durationMs of [DEFAULT_DURATION_MS,MAX_DELEGATION_MS]){
+    const f=setup();f.client.endUser.getDelegationForEndUserAccount=async()=>({expiresAt:new Date(now+durationMs).toISOString()});
+    const subject=await f.adapter.verifyEnrollment({accessToken:'synthetic-test-token',wallet:f.grant.wallet});assert.equal(subject.delegationExpiresAt,now+durationMs);
+    await f.adapter.sign(f.order,f.grant,now);assert.equal(f.calls.length,1);
+    assert.equal(f.calls[0].typedData.message.validBefore,String(Math.floor(f.order.expiresAt/1000)));
+    assert.ok(Number(f.calls[0].typedData.message.validBefore)*1000<=now+300000);
+  }
+  for(const expiresAt of [new Date(now+MAX_DELEGATION_MS+1).toISOString(),new Date(now).toISOString(),'Infinity','not-a-date']){
+    const f=setup();f.client.endUser.getDelegationForEndUserAccount=async()=>({expiresAt});
+    await assert.rejects(f.adapter.verifyEnrollment({accessToken:'synthetic-test-token',wallet:f.grant.wallet}),{code:'AUTHENTICATED_ENROLLMENT_REQUIRED'});
+    await assert.rejects(f.adapter.sign(f.order,f.grant,now),{code:'DELEGATION_EXPIRED_OR_UNBOUNDED'});assert.equal(f.calls.length,0);
+  }
+});
 test('missing, expired, overly long or wrong-account delegation never calls signer',async()=>{
   for(const alter of [f=>{f.client.endUser.getDelegationForEndUserAccount=async()=>null;},
     f=>{f.client.endUser.getDelegationForEndUserAccount=async()=>({expiresAt:new Date(Date.now()-1).toISOString()});},
-    f=>{f.client.endUser.getDelegationForEndUserAccount=async()=>({expiresAt:new Date(Date.now()+172800000).toISOString()});},
+    f=>{f.client.endUser.getDelegationForEndUserAccount=async()=>({expiresAt:new Date(Date.now()+MAX_DELEGATION_MS+3600000).toISOString()});},
     f=>{f.client.endUser.getEndUser=async()=>({userId:'other',evmAccountObjects:[{address:f.grant.wallet}]});},
     f=>{f.client.endUser.getEndUser=async()=>({userId:f.grant.userId,evmAccountObjects:[{address:f.grant.wallet,exportedAt:new Date().toISOString()}]});}]){
     const f=setup();alter(f);await assert.rejects(()=>f.adapter.sign(f.order,f.grant));assert.equal(f.calls.length,0);

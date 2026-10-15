@@ -3,6 +3,7 @@ import {createPrivateKey,createPublicKey} from 'node:crypto';
 import {basename,dirname,isAbsolute,join,resolve,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {validateGrant,NETWORK,TOKEN} from './intent.mjs';
+import {isAllowedDurationMs} from './duration-policy.mjs';
 
 const REPOSITORY=realpathSync(fileURLToPath(new URL('../../',import.meta.url)));
 const UUID='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -100,7 +101,7 @@ function validateConfig(input){
   fields(input,CONFIG_KEYS);
   try{
     if(input.developmentProjectConfirmed!==true||!UUID4.test(input.projectId)||!Number.isInteger(input.enrollmentPort)||input.enrollmentPort<1024||input.enrollmentPort>65535||
-      ![3600000,14400000,86400000].includes(input.durationMs)||!/^acct_[A-Za-z0-9]{8,100}$/.test(input.merchantAccount)||
+      !isAllowedDurationMs(input.durationMs)||!/^acct_[A-Za-z0-9]{8,100}$/.test(input.merchantAccount)||
       !/^[A-Za-z0-9_-]{1,100}$/.test(input.policyId)||typeof input.fromBlock!=='string'||!/^(0|[1-9][0-9]{0,15})$/.test(input.fromBlock))throw new Error();
     for(const path of [input.stateDir,input.orderDirectory])if(typeof path!=='string'||!isAbsolute(path)||resolve(path)!==path)throw new Error();
     if(input.orderDirectory===input.stateDir||input.orderDirectory.startsWith(input.stateDir+'/')||input.stateDir.startsWith(input.orderDirectory+'/'))throw new Error();

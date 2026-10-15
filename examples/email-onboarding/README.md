@@ -77,8 +77,14 @@ public state, and no sign-in action grants delegation or a payment mandate.
 
 Sign-in may create an EVM EOA in the development project. It never grants
 delegation automatically. After authentication, the user separately selects an
-account, checks explicit consent and clicks the delegation button for 1, 4 or
-24 hours. The page also reads delegation status and revokes the selected
+account, checks explicit consent and clicks the delegation button. The default
+selection is 30 days, with 90 days or short 1/4/24-hour options. This finite local
+policy does not prove Coinbase accepts a long expiry; the provider result must
+match the requested expiry exactly or remain unconfirmed without automatic retry.
+Selecting/changing a duration does not request a delegation; changing it clears
+the consent checkbox. Existing mandates retain their exact original expiry and
+spent/reserved cumulative budget, with no automatic renewal or budget reset.
+The page also reads delegation status and revokes the selected
 account's delegation. With no enrollment backend configured, provider-only
 revocation remains available and does not claim to stop any existing broker
 mandate. With a backend configured, that shortcut is disabled: the combined

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {OnboardingController,validateDevelopmentConfig} from '../src/controller.ts';
+import {DEFAULT_DURATION_MS,MAX_DELEGATION_MS} from '../src/duration-policy.ts';
 
 const wallet='0x'+'1'.repeat(40),other='0x'+'2'.repeat(40),userId=randomUUID();
 const config={projectId:randomUUID(),developmentConfirmed:true,enrollmentOrigin:'http://127.0.0.1:43210'};
@@ -53,6 +54,38 @@ test('confirmation needs separate consent and consumes original nonce exactly on
   assert.deepEqual(f.controller.connection(),f.confirmation.agentConnection);assert.equal(f.controller.state().paymentsEnabled,false);
   assert.ok(!JSON.stringify(f.controller.state()).includes(capability));
   await assert.rejects(f.controller.confirmMandate(true),/MANDATE_PROPOSAL_EXPIRED_OR_USED/);assert.equal(f.calls.length,2);
+});
+test('30- and 90-day mandates confirm exact terms while the challenge remains limited to two minutes',async t=>{
+  const now=Date.now();t.mock.method(Date,'now',()=>now);
+  for(const duration of [DEFAULT_DURATION_MS,MAX_DELEGATION_MS]){
+    const f=fixture();f.grant.expiresAt=now+duration;await f.controller.initialize();await f.controller.proposeMandate();
+    assert.equal(f.controller.state().proposal.challengeExpiresAt,now+90000);await f.controller.confirmMandate(true);
+    assert.equal(f.controller.state().mandate.expiresAt,now+duration);
+    assert.equal(f.controller.state().mandate.perCallAtomic,'5000000');assert.equal(f.controller.state().mandate.totalAtomic,'10000000');
+    assert.equal(f.controller.state().paymentsEnabled,false);assert.equal(f.controller.state().fundingAccepted,false);
+  }
+  const overChallenge=fixture();overChallenge.grant.expiresAt=now+MAX_DELEGATION_MS;overChallenge.proposal.challengeExpiresAt=now+120001;
+  await overChallenge.controller.initialize();await assert.rejects(overChallenge.controller.proposeMandate(),/ENROLLMENT_RESPONSE_REQUIRES_REVIEW/);
+});
+test('expired and over-90-day mandates cannot activate, while historical recovery retains original terms',async t=>{
+  const now=Date.now();t.mock.method(Date,'now',()=>now);
+  for(const expiresAt of [now,now-1,now+MAX_DELEGATION_MS+1]){
+    const f=fixture();f.grant.expiresAt=expiresAt;await f.controller.initialize();
+    await assert.rejects(f.controller.proposeMandate(),/ENROLLMENT_RESPONSE_REQUIRES_REVIEW/);
+    assert.equal(f.controller.state().proposal,undefined);assert.equal(f.controller.connection(),undefined);
+  }
+  const overRecovery=fixture();overRecovery.grant.expiresAt=now+MAX_DELEGATION_MS+1;await overRecovery.controller.initialize();
+  await assert.rejects(overRecovery.controller.recoverConnection(true),/ENROLLMENT_RESPONSE_REQUIRES_REVIEW/);assert.equal(overRecovery.controller.connection(),undefined);
+  const historical=fixture();historical.grant.expiresAt=now-MAX_DELEGATION_MS;await historical.controller.initialize();await historical.controller.recoverConnection(true);
+  assert.equal(historical.controller.state().mandate.expiresAt,now-MAX_DELEGATION_MS);assert.equal(historical.controller.state().connectionRecoveryOnly,true);
+  assert.equal(historical.controller.state().mandate.totalAtomic,'10000000');assert.equal(historical.controller.state().paymentsEnabled,false);
+});
+test('existing mandate keeps its original shorter expiry, grant ID and cumulative budget after the default changes',async()=>{
+  const f=fixture();f.proposal.existing=true;const original={...f.grant};await f.controller.initialize();await f.controller.proposeMandate();
+  assert.equal(f.controller.state().proposal.existing,true);await f.controller.confirmMandate(true);
+  assert.deepEqual(f.controller.state().mandate,original);
+  assert.deepEqual(f.providerCalls,['getAccessToken','getAccessToken'],'reviewing existing terms never creates or renews provider delegation');
+  assert.equal(f.calls.length,2);assert.equal(f.controller.state().paymentsEnabled,false);
 });
 test('wrong network/token/caps/identity, expired challenge and extra fields never become approvable',async()=>{
   for(const mutate of [p=>({...p,grant:{...p.grant,network:'eip155:8453'}}),p=>({...p,grant:{...p.grant,asset:other}}),

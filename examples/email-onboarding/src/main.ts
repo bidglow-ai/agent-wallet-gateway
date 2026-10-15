@@ -30,7 +30,7 @@ const messages: Record<string, string> = {
   DELEGATION_STATUS_UNCONFIRMED: 'Delegation status is unavailable. No new delegation was requested.',
   REVIEW_EXISTING_DELEGATION: 'This account already has an active delegation. Review or revoke it before creating another.',
   AUTHENTICATED_ACCOUNT_CHANGED: 'The signed-in account changed. Select and review the account again.',
-  EXPLICIT_BOUNDED_DELEGATION_REQUIRED: 'Select a duration up to 24 hours and explicitly authorize the selected development account.',
+  EXPLICIT_BOUNDED_DELEGATION_REQUIRED: 'Select 1, 4 or 24 hours, or 30 or 90 days, and explicitly authorize the selected development account.',
   DELEGATION_RESPONSE_REQUIRES_REVIEW: 'The returned delegation expiry did not match the requested bound. Review or revoke this account’s delegation.',
   TRUSTED_ENROLLMENT_ORIGIN_REQUIRED: 'Enrollment is blocked. Configure the exact trusted http://127.0.0.1:port backend origin separately.',
   AUTHENTICATED_ENROLLMENT_REQUIRED: 'An authenticated Coinbase session is required. No mandate was confirmed by this page.',
@@ -77,7 +77,7 @@ function render() {
     'Network: Base Sepolia (eip155:84532); TEST USDC only',`Token: ${grant.asset}`,
     'Per payment: 5 test USDC; shared total: 10 test USDC (not a daily reset)',
     `Grant: ${grant.grantId}`,`Exact expiry: ${new Date(grant.expiresAt).toISOString()}`,
-    proposal?`Proposal expires: ${new Date(proposal.challengeExpiresAt).toISOString()}; existing mandate: ${proposal.existing?'yes — original budget retained':'no'}`:state.connectionRecoveryOnly?'Historical mandate — recovery only. No renewal, no new payment, no budget reset.':'Confirmed development mandate; no payment acceptance inferred.',
+    proposal?`Proposal expires: ${new Date(proposal.challengeExpiresAt).toISOString()}; existing mandate: ${proposal.existing?'yes — original expiry and cumulative budget retained':'no'}`:state.connectionRecoveryOnly?'Historical mandate — recovery only. No renewal, no new payment, no budget reset.':'Confirmed development mandate; no payment acceptance inferred.',
   ].join('\n'):'No proposal has been requested.';
   const connection=controller.connection();
   element('connection-mode').textContent=connection?(state.connectionRecoveryOnly?'RECOVERY ONLY: inspect/reconcile existing outcomes. Paying, signing and settlement are disabled by the backend. This does not renew an expired/revoked mandate.':'Bounded testnet mandate connection. No real provider/payment acceptance inferred.'):'No connection available.';
@@ -113,6 +113,7 @@ element('change-email').addEventListener('click',()=>{
 });
 account.addEventListener('change', () => { controller.selectAccount(account.value); consent.checked = false;mandateConsent.checked=false;revokeConsent.checked=false;recoveryConsent.checked=false; render(); });
 consent.addEventListener('change', render);
+hours.addEventListener('change', () => { consent.checked = false; render(); });
 mandateConsent.addEventListener('change',render);revokeConsent.addEventListener('change',render);recoveryConsent.addEventListener('change',render);
 element('refresh').addEventListener('click', () => { void act(() => controller.refreshDelegation(), 'Delegation status refreshed through Coinbase. This did not authorize a payment mandate.'); });
 element('grant').addEventListener('click', () => {

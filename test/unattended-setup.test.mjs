@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {importCdpFiles,buildOperatorFiles,setupErrorCode} from '../src/unattended/setup-files.mjs';
 import {loadOperatorBundle,validateOperatorConfig} from '../src/unattended/runtime.mjs';
+import {DELEGATION_DURATION_HOURS,DEFAULT_DURATION_MS,MAX_DELEGATION_MS} from '../src/unattended/duration-policy.mjs';
 
 const REPOSITORY=fileURLToPath(new URL('../',import.meta.url)).replace(/\/$/,'');
 const CLI=fileURLToPath(new URL('../scripts/development-setup.mjs',import.meta.url));
@@ -55,6 +56,15 @@ test('build validates and writes an exclusive bundle accepted by the existing ru
   assert.equal(lstatSync(args.outputFile).mode&0o777,0o600);
   assert.equal(existsSync(f.config.stateDir),false);assert.equal(existsSync(f.config.orderDirectory),false);
   const before=readFileSync(args.outputFile);rejected(()=>buildOperatorFiles(args));assert.deepEqual(readFileSync(args.outputFile),before);
+});
+test('offline operator build supports exact30/90day and legacy short durations without starting the provider',t=>{
+  const f=fixture(t),args=buildArgs(f);
+  for(const hours of DELEGATION_DURATION_HOURS){
+    const config={...f.config,durationMs:hours*3600000},outputFile=join(f.directory,'operator-'+hours+'.json');
+    jsonWrite(args.configFile,config);assert.equal(buildOperatorFiles({...args,outputFile}).operatorBuilt,true);
+    assert.equal(loadOperatorBundle(outputFile).config.durationMs,config.durationMs);
+  }
+  assert.equal(existsSync(f.config.stateDir),false);assert.equal(existsSync(f.config.orderDirectory),false);
 });
 test('unsafe or missing parents/files, file symlinks, hardlinks and oversized reads fail without output',t=>{
   for(const mutate of [f=>chmodSync(f.directory,0o755),f=>chmodSync(f.directory,0o777),f=>chmodSync(f.apiKeyFile,0o644),f=>rmSync(f.apiKeyFile),
@@ -114,7 +124,8 @@ test('pure setup configuration validation never relaxes the existing runtime sch
   for(const key of Object.keys(f.config)){const missing={...f.config};delete missing[key];invalid.push(missing);}
   for(const change of [{extra:true},{developmentProjectConfirmed:1},{projectId:'not-a-uuid'},{expectedWallet:'0x'+'0'.repeat(40)},
     {payTo:'0x'+'0'.repeat(40)},{merchantOrigin:'http://merchant.invalid'},{perCallAtomic:5000000},{perCallAtomic:'5000001'},
-    {perCallAtomic:'5000000',totalAtomic:'4000000'},{totalAtomic:'10000001'},{durationMs:172800000},{policyId:'invalid policy'},
+    {perCallAtomic:'5000000',totalAtomic:'4000000'},{totalAtomic:'10000001'},{durationMs:172800000},
+    ...[MAX_DELEGATION_MS+1,Infinity,NaN,String(DEFAULT_DURATION_MS),null].map(durationMs=>({durationMs})),{policyId:'invalid policy'},
     {merchantAccount:'acct_invalid_account'},{fromBlock:'01'},{stateDir:'relative'},{orderDirectory:f.config.stateDir},
     {onboardingOrigin:'http://0.0.0.0:4376'},{onboardingOrigin:'http://127.0.0.1:4376/'},{enrollmentPort:80}])invalid.push({...f.config,...change});
   for(const config of invalid){

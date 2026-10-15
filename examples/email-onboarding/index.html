@@ -38,7 +38,8 @@
         <h2 id="delegate-heading">3. Explicitly authorize one development account</h2>
         <p>The provider delegation is account-scoped, not restricted to testnet, USDC, a recipient or a spending budget. The separate development project and its independently verified server policies are essential. This page cannot send a payment.</p>
         <label for="hours">Expires after</label>
-        <select id="hours"><option value="1">1 hour</option><option value="4">4 hours</option><option value="24">24 hours</option></select>
+        <select id="hours" aria-describedby="duration-policy"><option value="720" selected>Long-term — 30 days (default)</option><option value="2160">Long-term — 90 days</option><option value="1">Short-term — 1 hour</option><option value="4">Short-term — 4 hours</option><option value="24">Short-term — 24 hours</option></select>
+        <p id="duration-policy">30 days is only the default selection, not authorization or automatic renewal. Provider approval of long-term durations still requires actual acceptance testing. Existing grants retain their original expiry and cumulative budget; changing the default does not renew or reset them.</p>
         <label class="check"><input id="consent" type="checkbox">I authorize this development project to sign for the selected account until expiry. This is separate from sign-in.</label>
         <button id="grant" type="button" disabled>Grant account-scoped delegation</button>
         <button id="revoke" type="button" disabled>Provider-only revocation (no backend configured)</button>

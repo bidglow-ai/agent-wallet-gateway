@@ -2,6 +2,7 @@ import http from 'node:http';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {NETWORK,TOKEN,validateGrant,PaymentError} from './intent.mjs';
 import {PaymentStoreError} from './store.mjs';
+import {isAllowedDurationMs,isBoundedDelegationExpiry} from './duration-policy.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const NONCE=/^[A-Za-z0-9_-]{43}$/;
@@ -11,7 +12,7 @@ function fields(value,names){
 }
 function identity(value,wallet,delegated=true){
   if(!value||!UUID.test(value.userId)||value.wallet!==wallet||
-    (delegated&&(!Number.isSafeInteger(value.delegationExpiresAt)||value.delegationExpiresAt<=Date.now()||value.delegationExpiresAt>Date.now()+86400000)))throw new PaymentError('AUTHENTICATED_ENROLLMENT_REQUIRED');
+    (delegated&&!isBoundedDelegationExpiry(value.delegationExpiresAt)))throw new PaymentError('AUTHENTICATED_ENROLLMENT_REQUIRED');
   return value;
 }
 function localOrigin(value,allowLocalhost=false){
@@ -28,7 +29,7 @@ export class EnrollmentAuthority {
   #signer;#registry;#config;#activate;#stop;#recover;#pending=new Map();#stopped=false;
   constructor({signer,registry,config,activate,revoke,recover}){
     fields(config,['projectId','expectedWallet','payTo','merchantOrigin','perCallAtomic','totalAtomic','durationMs']);
-    if(!UUID.test(config.projectId)||![3600000,14400000,86400000].includes(config.durationMs)||typeof activate!=='function'||typeof revoke!=='function')throw new PaymentError('DEVELOPMENT_ENROLLMENT_CONFIGURATION_REQUIRED');
+    if(!UUID.test(config.projectId)||!isAllowedDurationMs(config.durationMs)||typeof activate!=='function'||typeof revoke!=='function')throw new PaymentError('DEVELOPMENT_ENROLLMENT_CONFIGURATION_REQUIRED');
     validateGrant({grantId:randomUUID(),userId:randomUUID(),wallet:config.expectedWallet,network:NETWORK,asset:TOKEN,
       payTo:config.payTo,merchantOrigin:config.merchantOrigin,perCallAtomic:config.perCallAtomic,totalAtomic:config.totalAtomic,expiresAt:Date.now()+config.durationMs});
     this.#signer=signer;this.#registry=registry;this.#config=Object.freeze({...config});this.#activate=activate;this.#stop=revoke;this.#recover=recover;
@@ -66,10 +67,16 @@ export class EnrollmentAuthority {
     const pending=this.#pending.get(nonce);this.#pending.delete(nonce);
     if(!pending||pending.deadline<=Date.now())throw new PaymentError('MANDATE_PROPOSAL_EXPIRED_OR_USED');
     const subject=await this.#authenticate(accessToken,wallet);
+    if(pending.deadline<=Date.now())throw new PaymentError('MANDATE_PROPOSAL_EXPIRED_OR_USED');
     if(this.#stopped)throw new PaymentError('MANDATE_REVOKED');
     const grant=this.#assertGrant(pending.grant,subject);
+    if(pending.deadline<=Date.now())throw new PaymentError('MANDATE_PROPOSAL_EXPIRED_OR_USED');
     const enrolled=this.#registry.enroll(subject,grant);
     const connection=await this.#activate(enrolled.grant);
+    // Activation may already have durably created the original mandate/ledger.
+    // A late response must not expose its capability, delete state, renew the
+    // challenge or reset budget. A fresh explicit proposal can inspect/reuse it.
+    if(pending.deadline<=Date.now())throw new PaymentError('MANDATE_PROPOSAL_EXPIRED_OR_USED');
     if(this.#stopped)throw new PaymentError('MANDATE_REVOKED');
     localOrigin(connection?.brokerOrigin);
     if(!NONCE.test(connection.clientToken))throw new PaymentError('BROKER_ACTIVATION_UNCONFIRMED');

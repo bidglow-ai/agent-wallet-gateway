@@ -3,6 +3,7 @@ import {isNativeError} from 'node:util/types';
 import {recoverTypedDataAddress} from 'viem';
 import {providerPolicy} from './cdp-signer.mjs';
 import {AUTH_TYPES,CHAIN_ID,NETWORK,TOKEN,validateGrant} from './intent.mjs';
+import {DEFAULT_DURATION_MS,isBoundedDelegationExpiry} from './duration-policy.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ADDRESS=/^0x[0-9a-f]{40}$/;
@@ -42,7 +43,7 @@ function configuration(evidence,installedPolicy,now){
   // Only payTo and the fixed five-test-USDC cap affect the proposed provider
   // policy. These local metadata values grant no new spending authority.
   const g=validateGrant({grantId:e.projectId,userId:e.userId,wallet:e.wallet,network:NETWORK,asset:TOKEN,
-    payTo:e.payTo,merchantOrigin:'https://expired-policy-probe.invalid',perCallAtomic:'5000000',totalAtomic:'10000000',expiresAt:now+3600000});
+    payTo:e.payTo,merchantOrigin:'https://expired-policy-probe.invalid',perCallAtomic:'5000000',totalAtomic:'10000000',expiresAt:now+DEFAULT_DURATION_MS});
   const expected=stable(providerPolicy(g).rules);
   if(stable(p.rules)!==expected)throw new Error();
   return {e:Object.freeze(e),policyId:p.id,expected};
@@ -56,7 +57,7 @@ async function verifyPreconditions(client,config,clock){
     client.policies.listPolicies({scope:'project',pageSize:100}),
   ]);
   const now=clock(),until=Date.parse(delegation?.expiresAt),accounts=user?.evmAccountObjects;
-  if(!Number.isSafeInteger(now)||now<=0||!Number.isSafeInteger(until)||until<=now||until>now+86400000||
+  if(!isBoundedDelegationExpiry(until,now)||
     user?.userId!==e.userId||!Array.isArray(accounts)||accounts.length!==1||
     typeof accounts[0]?.address!=='string'||accounts[0].address.toLowerCase()!==e.wallet||accounts[0].ejectedAt||accounts[0].exportedAt||
     policy?.id!==policyId||policy.scope!=='project'||stable(policy.rules)!==expected||

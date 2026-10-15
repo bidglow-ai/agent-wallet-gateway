@@ -7,7 +7,7 @@
     "merchantOrigin": "https://merchant.example",
     "perCallAtomic": "5000000",
     "totalAtomic": "10000000",
-    "durationMs": 3600000,
+    "durationMs": 2592000000,
     "policyId": "REPLACE_WITH_REVIEWED_TEST_POLICY_ID",
     "merchantAccount": "acct_REPLACE_WITH_SANDBOX_ACCOUNT",
     "fromBlock": "0",
