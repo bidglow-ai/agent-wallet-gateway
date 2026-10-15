@@ -180,6 +180,36 @@ the backend stop/revoke operation first. Local revocation remains durable even
 if Coinbase's revocation request fails; already issued signatures may still be
 usable until their short order expiry.
 
+## Expired sign-only provider-policy probe
+
+After the actual project policy and owner account delegation are configured, a
+trusted operator can explicitly run the finite probe below. Do not give its
+developer credential file to an agent/MCP client. The setup-evidence file contains
+only `projectId`, `userId`, `wallet`, `payTo`, `merchantAccount`, `testnetOnly:true`
+and `fundingAccepted:false`; the installed-policy file contains exactly `id`,
+`scope` and `rules` from independently verified provider readback. Both use the
+same protected-file requirements as the credentials. These are operator records,
+not browser-supplied permission or proof of project identity by themselves.
+
+```sh
+node --dns-result-order=ipv4first --no-network-family-autoselection scripts/provider-policy-probe.mjs --run-expired-testnet-policy-probe --cdp-file /absolute/private/cdp.json --setup-evidence-file /absolute/private/setup-evidence.json --installed-policy-file /absolute/private/installed-policy.json
+```
+
+The fixed suite rechecks the exact unique project policy, owned account and
+bounded active delegation before every signing request. It locally recovers one
+positive control, then tests a wrong payee, excess value, wrong verifying contract
+and different primary type. Every request fixes Base Sepolia and
+`validAfter:0` / `validBefore:1`: it never creates a currently usable USDC
+authorization. Signatures are discarded in memory; no broadcast, settlement,
+facilitator, Stripe, faucet or payment-ledger action is included.
+
+An authentication failure, missing delegation, invalid request or refusal to
+sign the expired positive control is **INCONCLUSIVE**, not policy-enforcement
+success. Do not change the probe to a live authorization to make it pass.
+**PASSED** establishes only those finite expired typed-data controls. It does
+not test every provider operation, establish universal deny-all, lifetime-budget
+enforcement, transaction expiry/revocation behavior, settlement or safe funding.
+
 ## Orders and agent adapters
 
 For this development milestone, frozen acceptance orders must be prepared by a

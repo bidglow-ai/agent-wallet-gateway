@@ -6,12 +6,71 @@
 | --- | --- |
 | Own-email login and first-use delegation lookup | Observed through the real SDK; lookup reports no active delegation. |
 | Protected CDP credentials and backend read authentication | Owner verification completed; API key and separate Wallet Secret downloaded/imported into protected local files. Actual policy/end-user GETs passed on Node 24.13.0 and 26.7.0 with explicit IPv4 process flags; signing privileges are not established by these reads. |
-| Provider policy, negative signing tests and bounded account delegation | Not yet accepted for this new signer. |
+| Provider project policy | Eight proposed rules installed through the Portal; independent runtime-key list/get readback matches the exact template and unique project policy. Enforcement/negative signing tests are not yet accepted. |
+| Bounded account delegation and mandate | Not yet granted/accepted for this new signer. |
 | Public test facilitator and Base Sepolia RPC | Read-only supported-network, SDK initialization and finalized-block checks passed; no verify/settle call. |
-| Authenticated Stripe merchant/deposit preflight | Implemented and fixture-tested; actual account, preview access and address/token match not yet accepted. |
+| Authenticated Stripe merchant/deposit reads | Actual test-mode account/balance and preview address-list GETs passed, including exact test USDC/address scope. Per-order application preflight and PaymentIntent recording remain unaccepted. |
 | New provider-signed test-USDC payment and independent Stripe evidence | Not yet run. |
 | Native clients | Codex has isolated synthetic tool-use evidence; no native provider-payment or universal-client acceptance. |
 | Mainnet/funding | Disabled and not accepted; no deposit instructions. |
+
+## Finite expired-policy probe — October 15, NOT provider execution acceptance
+
+- Added an explicit, protected-path-only development CLI for one expired
+  positive-control signature and four fixed policy-negative requests. Every
+  request fixes Base Sepolia and `validBefore:1`; the probe has no broadcasting,
+  facilitator, Stripe, faucet or payment-ledger path and never exposes a signature.
+- It rechecks the exact unique policy, owned account and bounded delegation
+  before every request. A positive signature must recover locally. Independent
+  review found that the initial error classifier accepted ordinary error
+  objects; it now requires a native Error with the pinned SDK's own-data APIError
+  fields and a policy-violation type. Authentication, billing, missing-resource,
+  timeout, rate-limit, getter/inherited/nested/plain errors cannot pass.
+- Node 26.7.0 and 24.13.0 full syntax/regression checks pass **173/173** each.
+  Independent review reran the 11 focused probe tests on both versions and
+  accepted the frozen repair. These tests use synthetic keys and SDK responses;
+  no actual provider signature or enforcement result is inferred.
+
+The real probe has **not** run: owner account-delegation consent remains pending.
+A refused expired positive control is inconclusive; never replace it with a
+live authorization to force success. A later probe pass would establish only
+these finite typed-data cases, not all provider operations, wallet-wide budget,
+payment settlement, native-client payments or safe real funding.
+
+## Actual Stripe test-mode reads and project-policy installation — October 15
+
+- The owner completed Stripe Dashboard login. The visible test-mode secret was
+  saved directly into a protected repository-external 0600 file with a 0700
+  direct parent, without chat, clipboard, command arguments or Git disclosure.
+  No new Stripe account, live configuration, secret rotation or deposit address
+  was created. This is the account's existing test environment, not evidence of
+  a newly provisioned standalone Stripe sandbox.
+- Actual authenticated `GET /account` and `GET /balance` with
+  `2026-05-27.preview` returned HTTP 200: the expected merchant matched,
+  `crypto_payments` was active, and balance `livemode` was false.
+- Actual `GET /crypto/deposit_addresses` with `2026-10-14.preview` returned HTTP
+  200 and exactly one unpaginated Base test address. It had no customer scope
+  and exactly the expected USDC token fields/TESTUSDC contract. No fallback
+  version, substitute payee or mainnet token was used. These real GET results
+  prove read availability here, not PaymentIntent write/settlement acceptance.
+- The development browser's selected account matched the one owned account
+  returned by the real CDP backend. Prepared the eight-rule policy with this
+  test merchant payee, submitted through the correct isolated project's Portal,
+  and independently read back both the unique project-policy list and policy by
+  ID with the non-Manage runtime key. Both rulesets matched the exact template.
+  Policy installation is not enforcement proof or a universal deny-all policy.
+- Built the protected operator bundle from actual provider values, verified
+  the Base Sepolia RPC and started only the local enrollment backend. Restarted
+  the owned local frontend with the exact backend origin; the authenticated
+  account persisted, delegation was absent, and no broker capability was
+  exposed. The account-level provider consent was handed to the owner, not
+  automatically checked by the agent.
+
+No provider signature, transfer, faucet, private Stripe write, production change
+or real-funding instruction occurred. Remaining: actual bounded delegation,
+provider-negative tests, one-time broker mandate, a new provider-signed test-USDC
+payment, independent settlement/Stripe recording and native-client acceptance.
+**Do not fund a wallet.**
 
 ## Actual protected credential import and backend authentication — October 15
 
