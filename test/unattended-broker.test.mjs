@@ -8,18 +8,20 @@ import {PaymentStore} from '../src/unattended/store.mjs';
 import {TestnetBroker} from '../src/unattended/broker.mjs';
 import {paymentTypedData,orderNonce,verifyOrderPayload} from '../src/unattended/intent.mjs';
 function setup(t){
-  const f=fixture(),dir=mkdtempSync(join(tmpdir(),'broker-isolated-')),store=new PaymentStore(dir,f.grant),calls={sign:0,settle:0,verify:0};
+  const f=fixture(),dir=mkdtempSync(join(tmpdir(),'broker-isolated-')),store=new PaymentStore(dir,f.grant),calls={preflight:0,sign:0,settle:0,verify:0};
   t.after(()=>{try{store.close();}catch{}rmSync(dir,{recursive:true,force:true});});
   const signer={sign:async order=>{calls.sign++;return f.signer.signTypedData(paymentTypedData(order,f.grant));},revoke:async()=>{}},
     merchant={settle:async(order,payload)=>{await verifyOrderPayload(order,f.grant,payload);calls.settle++;return {transactionHash:'0x'+(order.id.replaceAll('-','').padEnd(64,'0'))};}},
-    verifier={verify:async(order,hash)=>{calls.verify++;return {orderId:order.id,nonce:orderNonce(order),amountAtomic:order.amountAtomic,network:order.network,transactionHash:hash||'0x'+'ab'.repeat(32),paymentIntentId:'pi_'+order.id.replaceAll('-','')};}};
+    verifier={preflight:async order=>{calls.preflight++;return {merchantVerified:true,testnetOnly:true,fundingAccepted:false,orderDigest:orderNonce(order)};},
+      verify:async(order,hash)=>{calls.verify++;return {orderId:order.id,nonce:orderNonce(order),amountAtomic:order.amountAtomic,network:order.network,transactionHash:hash||'0x'+'ab'.repeat(32),paymentIntentId:'pi_'+order.id.replaceAll('-','')};}};
   return {...f,dir,store,calls,signer,merchant,verifier,broker:new TestnetBroker({store,signer,merchant,verifier})};
 }
 test('one unattended fixture payment confirms once without repeated owner prompts',async t=>{
   const f=setup(t);assert.equal((await f.broker.pay(f.order)).state,'confirmed');
-  assert.deepEqual(f.calls,{sign:1,settle:1,verify:1});
+  assert.deepEqual(f.calls,{preflight:1,sign:1,settle:1,verify:1});
   await assert.rejects(()=>f.broker.pay(f.order),/ORDER_ALREADY_EXISTS/);
   assert.equal((await f.broker.reconcile(f.order.id)).state,'confirmed');assert.equal(f.calls.settle,1);
+  assert.equal(f.calls.preflight,1);
 });
 test('parallel clients and new processes share one durable grant; changed operation cannot reset budget',async t=>{
   const f=setup(t),other=new PaymentStore(f.dir,f.grant);t.after(()=>other.close());
@@ -30,13 +32,63 @@ test('parallel clients and new processes share one durable grant; changed operat
   await assert.rejects(()=>f.broker.pay(anotherOrder(f.order)),/TOTAL_BUDGET_EXCEEDED/);
   assert.equal(f.calls.sign,2);assert.equal(f.store.summary().allocatedAtomic,'10000000');
 });
+test('missing, undefined, stale, inherited, extra or accessor preflight attestations cannot reserve or sign',async t=>{
+  const valid=order=>({merchantVerified:true,testnetOnly:true,fundingAccepted:false,orderDigest:orderNonce(order)});
+  let getters=0;
+  for(const response of [()=>undefined,()=>true,()=>null,()=>({merchantVerified:true,testnetOnly:true,fundingAccepted:false}),
+    order=>({...valid(order),merchantVerified:'true'}),order=>({...valid(order),fundingAccepted:true}),order=>({...valid(order),testnetOnly:false}),
+    order=>({...valid(order),orderDigest:orderNonce(anotherOrder(order))}),order=>({...valid(order),extra:true}),
+    order=>Object.create(valid(order)),order=>Object.defineProperty({...valid(order)},'extra',{value:true}),
+    order=>Object.assign(valid(order),{[Symbol('extra')]:true}),order=>Object.defineProperty({...valid(order)},'merchantVerified',{enumerable:true,get(){getters++;return true;}})]){
+    const f=setup(t);f.verifier.preflight=async()=>response(f.order);
+    await assert.rejects(()=>f.broker.pay(f.order),error=>error.code==='MERCHANT_PREFLIGHT_UNVERIFIED'&&error.message==='MERCHANT_PREFLIGHT_UNVERIFIED');
+    assert.equal(f.store.get(f.order.id),null);assert.equal(f.store.summary().allocatedAtomic,'0');assert.equal(f.calls.sign,0);assert.equal(f.calls.settle,0);
+  }
+  const f=setup(t);delete f.verifier.preflight;await assert.rejects(()=>f.broker.pay(f.order),/MERCHANT_PREFLIGHT_UNVERIFIED/);
+  assert.equal(f.store.summary().allocatedAtomic,'0');assert.equal(getters,0);
+});
+test('failed read-only preflight leaves no allocation, explicit later success uses the original allowance',async t=>{
+  const f=setup(t),preflight=f.verifier.preflight;
+  f.verifier.preflight=async()=>{f.calls.preflight++;throw new Error('synthetic-private-'+f.order.payTo);};
+  await assert.rejects(()=>f.broker.pay(f.order),error=>error.code==='MERCHANT_PREFLIGHT_UNVERIFIED'&&!JSON.stringify(error).includes(f.order.payTo));
+  assert.equal(f.store.get(f.order.id),null);assert.equal(f.store.summary().allocatedAtomic,'0');assert.equal(f.calls.sign,0);assert.equal(f.calls.settle,0);
+  f.verifier.preflight=preflight;assert.equal((await f.broker.pay(f.order)).state,'confirmed');assert.equal(f.store.summary().allocatedAtomic,'5000000');
+  const before=f.calls.preflight;await assert.rejects(()=>f.broker.pay(f.order),/ORDER_ALREADY_EXISTS/);await f.broker.reconcile(f.order.id);
+  assert.equal(f.calls.preflight,before);assert.equal(f.calls.sign,1);assert.equal(f.calls.settle,1);
+});
+test('revocation or order/grant expiry during preflight is rechecked before reservation and signing',async t=>{
+  for(const mode of ['revoke','order-expiry','grant-expiry']){
+    const f=setup(t),preflight=f.verifier.preflight;let release,entered;
+    const gate=new Promise(resolve=>{release=resolve;}),started=new Promise(resolve=>{entered=resolve;});
+    f.verifier.preflight=async order=>{entered();await gate;return preflight(order);};
+    const attempt=f.broker.pay(f.order);await started;
+    assert.equal(f.store.get(f.order.id),null);assert.equal(f.store.summary().allocatedAtomic,'0');
+    const realNow=Date.now;
+    try{
+      if(mode==='revoke')f.store.revoke();else Date.now=()=>mode==='order-expiry'?f.order.expiresAt+1:f.grant.expiresAt+1;
+      release();await assert.rejects(attempt,/GRANT_REVOKED|INVALID_ORDER|GRANT_EXPIRED/);
+    }finally{Date.now=realNow;release();}
+    assert.equal(f.store.get(f.order.id),null);assert.equal(f.store.summary().allocatedAtomic,'0');assert.equal(f.calls.sign,0);assert.equal(f.calls.settle,0);
+  }
+});
+test('concurrent preflight results for the same business quote can reserve and pay only once',async t=>{
+  const f=setup(t),changed={...anotherOrder(f.order),quoteId:f.order.quoteId},preflight=f.verifier.preflight;let release,ready;
+  const gate=new Promise(resolve=>{release=resolve;}),started=new Promise(resolve=>{ready=resolve;});let waiting=0;
+  f.verifier.preflight=async order=>{if(++waiting===2)ready();await gate;return preflight(order);};
+  const attempts=[f.broker.pay(f.order),f.broker.pay(changed)];await started;assert.equal(f.calls.sign,0);release();
+  const results=await Promise.allSettled(attempts);assert.equal(results.filter(result=>result.status==='fulfilled').length,1);
+  assert.equal(results.find(result=>result.status==='rejected').reason.code,'QUOTE_ALREADY_EXISTS');
+  assert.equal(f.calls.sign,1);assert.equal(f.calls.settle,1);assert.equal(f.store.summary().allocatedAtomic,'5000000');
+});
 test('lost settlement response stays reserved after reopen, no signature or settlement retry',async t=>{
   const f=setup(t);f.merchant.settle=async()=>{f.calls.settle++;throw new Error('sensitive-example');};
   const result=await f.broker.pay(f.order);assert.equal(result.state,'unknown');assert.ok(!JSON.stringify(result).includes('sensitive-example'));
   const reopened=new PaymentStore(f.dir,f.grant);t.after(()=>reopened.close());
   const b=new TestnetBroker({store:reopened,signer:f.signer,merchant:f.merchant,verifier:f.verifier});
   await assert.rejects(()=>b.pay(f.order),/ORDER_ALREADY_EXISTS/);
+  f.verifier.preflight=()=>assert.fail('reconciliation must not preflight');
   assert.equal((await b.reconcile(f.order.id)).state,'confirmed');assert.equal(f.calls.sign,1);assert.equal(f.calls.settle,1);
+  assert.equal(f.store.summary().allocatedAtomic,'5000000');
 });
 test('Stripe pending resumes same settled transaction, never charges again',async t=>{
   const f=setup(t),verify=f.verifier.verify;let first=true;
@@ -63,7 +115,8 @@ test('process death in reserved, signed or settling recovers only from independe
     if(phase!=='reserved')f.store.transition(f.order.id,'reserved','signed');
     if(phase==='settling')f.store.transition(f.order.id,'signed','settling');
     const reopened=new PaymentStore(f.dir,f.grant);t.after(()=>reopened.close());
-    const b=new TestnetBroker({store:reopened,signer:{sign:()=>assert.fail('must not sign')},merchant:{settle:()=>assert.fail('must not settle')},verifier:f.verifier});
+    const b=new TestnetBroker({store:reopened,signer:{sign:()=>assert.fail('must not sign')},merchant:{settle:()=>assert.fail('must not settle')},
+      verifier:{preflight:()=>assert.fail('must not preflight'),verify:f.verifier.verify}});
     assert.equal((await b.reconcile(f.order.id)).state,'confirmed');
     assert.equal(f.calls.sign,0);assert.equal(f.calls.settle,0);
   }

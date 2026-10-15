@@ -38,14 +38,22 @@ wallet. Never fund an address on the assumption those products share it.
    analytics. Sign in in the browser; never send email codes or secrets in chat.
 3. Pin the authenticated **development** wallet's public address in operator
    configuration. This is intentionally not a first-request-wins enrollment.
-4. Install and independently test the proposed project policy returned by
+4. Obtain the receiving address from the **same Stripe sandbox merchant** used
+   for payment evidence. An arbitrary CDP/server-wallet address is not a Stripe
+   deposit address. Follow the official [sandbox x402 setup](https://docs.stripe.com/payments/machine/x402#test-in-a-stripe-sandbox)
+   to explicitly create a sandbox Base deposit address; its creation example
+   uses `2026-07-29.preview`. This guide/helper does not create one for you.
+   Confirm active crypto capability and exact address/token ownership before
+   fixing `payTo` and installing its provider policy. Never use a live deposit
+   address or send real funds to make this test pass.
+5. Install and independently test the proposed project policy returned by
    `providerPolicy(grant)` in `src/unattended/cdp-signer.mjs`, in this project only.
    The service does not create or weaken provider policies at startup. Check wrong
    payee/token/value/type, expiry/revocation and unexpected provider operations.
    Provider policies do **not** establish the broker's lifetime budget or order
    binding, and omitted provider operations can default to allowed. Broad project
    administrator credentials must remain outside agent processes.
-5. Obtain the normal CDP project API credentials/Wallet Secret and the matching
+6. Obtain the normal CDP project API credentials/Wallet Secret and the matching
    **Stripe sandbox** key in the operator's protected environment. Do not paste
    them into a chat, browser frontend, MCP configuration, repository or issue.
    This development source does not automatically request expanded permissions.
@@ -178,6 +186,19 @@ testnet settlement in Stripe sandbox, but never sends funds again.
 
 ## Failure behavior and remaining gates
 
+- Every new payment requires a fresh, mandatory read-only merchant preflight.
+  It checks the expected Stripe account, sandbox balance, active crypto
+  capability and one non-customer-scoped Base sandbox deposit address supporting
+  the exact test USDC contract. Provider EVM addresses are compared as the same
+  20 bytes, not rewritten into a different destination. The new authenticated
+  deposit-list GET uses explicit `2026-10-14.preview`; existing PaymentIntent
+  recording retains `2026-05-27.preview`. If the account lacks this preview/API
+  capability or returns ambiguous data, stop; do not weaken checks or switch
+  versions automatically. Those real account/API gates are not yet accepted.
+- A failed preflight happens before reservation, signature or settlement, so it
+  does not burn unused budget. No automatic retry is made. After the read,
+  atomic reservation revalidates the unchanged order/quote, active mandate,
+  expiry and shared budget. A duplicate/concurrent request cannot pay twice.
 - Duplicate orders/business quotes are never repaid. Unknown outcomes retain the
   entire reserved amount. Inspect/reconcile does not sign or settle again.
 - Reconciliation checks canonical/finalized testnet chain evidence and fresh

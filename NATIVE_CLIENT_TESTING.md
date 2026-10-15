@@ -29,7 +29,9 @@ and native read-tool use, never native payment-tool use.
 The runner creates one temporary local fixture with a disposable unfunded
 in-memory signer, a private payer ledger, and mock settlement/evidence adapters.
 No CDP, AWAL, RPC, facilitator, Stripe or merchant network request is implemented
-in that fixture. Its only frozen order is 5 **synthetic** test USDC under a shared
+in that fixture. Its mandatory merchant-preflight attestation is also synthetic;
+it is not a successful Stripe deposit-ownership lookup. Its only frozen order is
+5 **synthetic** test USDC under a shared
 10-test-USDC allowance. `confirmed` there means fixture state, not real money.
 
 Codex is launched with an ephemeral session, ignored user configuration,

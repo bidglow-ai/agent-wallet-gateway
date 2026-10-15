@@ -53,7 +53,8 @@ test('actual local enrollment -> restricted broker -> fixture payment -> restart
       revoke:async()=>{if(revokeFails)throw new PaymentError('PROVIDER_REVOCATION_UNCONFIRMED');},
     },
     merchant:{settle:async order=>{settles++;const tx='0x'+(settles===1?'a':'b').repeat(64);settled.set(order.id,tx);if(loseNext){loseNext=false;throw new Error('synthetic lost response');}return {transactionHash:tx};}},
-    verifier:{verify:async order=>({orderId:order.id,nonce:orderNonce(order),amountAtomic:order.amountAtomic,network:order.network,transactionHash:settled.get(order.id),paymentIntentId:order.id===f.order.id?'pi_isolatedruntime':'pi_isolatedrecovered'})},
+    verifier:{preflight:async order=>({merchantVerified:true,testnetOnly:true,fundingAccepted:false,orderDigest:orderNonce(order)}),
+      verify:async order=>({orderId:order.id,nonce:orderNonce(order),amountAtomic:order.amountAtomic,network:order.network,transactionHash:settled.get(order.id),paymentIntentId:order.id===f.order.id?'pi_isolatedruntime':'pi_isolatedrecovered'})},
   };
   let runtime=await startDevelopmentRuntime({config,dependencies});
   t.after(async()=>{await runtime?.close();});

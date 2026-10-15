@@ -37,6 +37,16 @@ the template a universal deny-all policy. Limit delegation to one empty EVM
 account and test actual provider rejections before signing. A compromised broker
 or another same-user process is not contained by its SQLite budget.
 
+New spending additionally requires a fresh read-only Stripe merchant preflight:
+the expected merchant, sandbox mode, active crypto capability, unique unscoped
+deposit address and exact test USDC must match the frozen order. Its attestation
+is bound to that order's digest; missing or ambiguous evidence cannot authorize a
+signature. This GET-only step occurs before allocation, followed by the original
+atomic active/expiry/uniqueness/budget checks. It never frees an existing hold,
+creates a deposit address/PaymentIntent, changes a policy or replaces independent
+settlement evidence. Reconciliation of an existing payment does not require new
+spending eligibility. Real preview/account acceptance is still a release gate.
+
 Delegation revocation stops future provider signatures, not authorizations that
 already exist. Those may remain spendable until the short order expiry.
 Independent evidence checks require exact USDC AuthorizationUsed/Transfer logs,

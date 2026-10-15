@@ -46,7 +46,8 @@ test('five SDK sessions share one actual broker ledger: two $5 test reservations
   t.after(async()=>{for(const c of clients)await c.close();for(const s of servers)await s.close();store.close();rmSync(dir,{recursive:true,force:true});});
   const broker=new TestnetBroker({store,signer:{sign:order=>{signs++;return f.signer.signTypedData(paymentTypedData(order,f.grant));}},
     merchant:{settle:async order=>{settles++;return{transactionHash:'0x'+order.id.replaceAll('-','').padEnd(64,'0')};}},
-    verifier:{verify:async(order,hash)=>({orderId:order.id,nonce:orderNonce(order),amountAtomic:order.amountAtomic,network:order.network,transactionHash:hash,paymentIntentId:'pi_'+order.id.replaceAll('-','')})}});
+    verifier:{preflight:async order=>({merchantVerified:true,testnetOnly:true,fundingAccepted:false,orderDigest:orderNonce(order)}),
+      verify:async(order,hash)=>({orderId:order.id,nonce:orderNonce(order),amountAtomic:order.amountAtomic,network:order.network,transactionHash:hash,paymentIntentId:'pi_'+order.id.replaceAll('-','')})}});
   for(let i=0;i<5;i++){
     const order=anotherOrder(f.order);orders.set(order.id,order);
     const server=createTestnetPaymentServer({broker,orderProvider:{get:async id=>orders.get(id)}}),client=new Client({name:'independent-sdk-session-'+i,version:'0'}),[a,b]=InMemoryTransport.createLinkedPair();

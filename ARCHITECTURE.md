@@ -37,6 +37,14 @@ Stripe evidence; resume only read/reconciliation of the same payment. A future
 production adapter must additionally freeze existing listing-owner and quote
 scope and preserve difference bidding and both boards.
 
+Before that reservation, perform a fresh **read-only** Stripe merchant preflight:
+the expected merchant, sandbox mode, active crypto capability and a unique
+merchant-scoped sandbox deposit address must match the frozen payee and official
+Base Sepolia USDC. A failed read cannot consume the allowance or cause signing.
+After the await, the original atomic reservation rechecks expiry, revocation,
+order/business-quote uniqueness and the aggregate budget. A second active check
+still precedes signing. This is not an automatic payment retry or budget reset.
+
 ## Acceptance gates
 
 1. Pure contract tests: wrong chain/token/payee/payer/amount, order retargeting,
@@ -61,13 +69,19 @@ scope and preserve difference bidding and both boards.
   and project-policy checks, narrow typed-data construction, server-side access
   token verification helper, including session-only authentication for revocation
   after a delegation expires.
-- `broker.mjs`: reserve before signing, no repayment, recovery of interrupted
+- `broker.mjs`: mandatory order-bound merchant preflight, reserve before signing,
+  no repayment, recovery of interrupted
   states only from independent existing chain/Stripe evidence.
 - `merchant.mjs`: official x402 resource server/facilitator adapter, using a
   **different** private merchant store from the payer store. No production route.
 - `chain-stripe-verifier.mjs`: fixed testnet RPC identity, signed-nonce/transfer
   logs, canonical receipt block and RPC finalized height, then fresh Stripe
   test-account and PaymentIntent evidence. Pending never becomes confirmed.
+  Before new spending, a separate GET-only preflight checks authenticated
+  merchant deposit ownership. Its new list request explicitly uses
+  `2026-10-14.preview`; PaymentIntent/account/balance requests retain
+  `2026-05-27.preview`. Unsupported preview access fails closed without version
+  fallback. Existing settlement reconciliation never needs the new preflight.
 - `mcp.mjs`: unmounted restricted testnet tool factory. A transport must bind
   each authenticated caller to one authorized broker; no public relay is included.
 - `http.mjs` and `client.mjs`: authenticated loopback-only broker transport and

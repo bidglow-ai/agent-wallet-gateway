@@ -1,4 +1,15 @@
-import {validateOrder,paymentPayload,PaymentError} from './intent.mjs';
+import {validateOrder,paymentPayload,orderNonce,PaymentError} from './intent.mjs';
+
+function merchantAttested(value,order){
+  try{
+    const keys=['merchantVerified','testnetOnly','fundingAccepted','orderDigest'];
+    if(!value||Object.getPrototypeOf(value)!==Object.prototype)return false;
+    const ownKeys=Reflect.ownKeys(value);
+    if(ownKeys.length!==keys.length||ownKeys.some(key=>!keys.includes(key)))return false;
+    const fields=Object.fromEntries(keys.map(key=>{const d=Object.getOwnPropertyDescriptor(value,key);if(!d||!Object.hasOwn(d,'value'))throw new Error();return [key,d.value];}));
+    return fields.merchantVerified===true&&fields.testnetOnly===true&&fields.fundingAccepted===false&&fields.orderDigest===orderNonce(order);
+  }catch{return false;}
+}
 
 // Trusted service object. Do NOT pass the signer/CDP credentials to AI clients.
 // Default AWAL MCP server does not import or expose this experimental broker.
@@ -11,7 +22,15 @@ export class TestnetBroker {
   }
   async pay(input){
     const order=validateOrder(input,this.#store.grant);
-    // Persist before any external call. Existing order is never signed/paid again.
+    this.#store.assertActive();
+    if(this.#store.get(order.id))throw new PaymentError('ORDER_ALREADY_EXISTS');
+    // Pure merchant GETs precede allocation: failure cannot burn the allowance.
+    // They are not a payment retry or authority to change a persisted budget.
+    try{
+      if(typeof this.#verifier?.preflight!=='function'||!merchantAttested(await this.#verifier.preflight(order),order))throw new Error();
+    }catch{throw new PaymentError('MERCHANT_PREFLIGHT_UNVERIFIED');}
+    // Reserve revalidates expiry, revocation, uniqueness and budget after the
+    // await, and still commits BEFORE any signing or money-moving operation.
     this.#store.reserve(order);
     try{
       this.#store.assertActive();

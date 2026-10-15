@@ -63,7 +63,11 @@ export async function startSyntheticFixture() {
         settlements.set(input.id, transactionHash);
         return { transactionHash };
       } },
-      verifier: { verify: async (input, transactionHash) => {
+      verifier: { preflight: async input => {
+        if (input.id !== orderId || orderNonce(input) !== orderNonce(order)) throw new PaymentError('SYNTHETIC_ORDER_SCOPE_MISMATCH');
+        record('preflight');
+        return { merchantVerified: true, testnetOnly: true, fundingAccepted: false, orderDigest: orderNonce(input) };
+      }, verify: async (input, transactionHash) => {
         verifications++; record('verify');
         const settled = settlements.get(input.id);
         if (!settled || (transactionHash && transactionHash !== settled)) throw new PaymentError('SYNTHETIC_EVIDENCE_MISSING');

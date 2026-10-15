@@ -3,6 +3,7 @@ import {TOKEN,CHAIN_ID,NETWORK,orderNonce,PaymentError} from './intent.mjs';
 const ABI=parseAbi(['event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)',
   'event Transfer(address indexed from, address indexed to, uint256 value)']);
 const TX=/^0x[0-9a-f]{64}$/;
+const sameAddress=(value,expected)=>typeof value==='string'&&/^0x[0-9a-fA-F]{40}$/.test(value)&&value.toLowerCase()===expected;
 
 export function verifyReceipt(order,receipt,head,finalizedBlock){
   if(receipt?.status!=='success'||!TX.test(receipt.transactionHash||'')||typeof receipt.blockNumber!=='bigint'||
@@ -27,17 +28,40 @@ export class ChainStripeVerifier {
       typeof fromBlock!=='bigint'||fromBlock<0n)throw new PaymentError('SANDBOX_EVIDENCE_CONFIGURATION_REQUIRED');
     this.#client=client;this.#key=stripeTestKey;this.#account=merchantAccount;this.#fetch=transport;this.#fromBlock=fromBlock;
   }
-  async #stripe(path,init={method:'GET'}){
+  async #stripe(path,init={method:'GET'},version='2026-05-27.preview'){
     try{
       const response=await this.#fetch('https://api.stripe.com/v1'+path,{...init,redirect:'error',signal:AbortSignal.timeout(15000),
-        headers:{Authorization:'Bearer '+this.#key,'Stripe-Version':'2026-05-27.preview',
+        headers:{Authorization:'Bearer '+this.#key,'Stripe-Version':version,
           'Content-Type':'application/x-www-form-urlencoded',...init.headers}});
       if(!response.ok)throw new Error();
       return await response.json();
     }catch{throw new PaymentError('STRIPE_EVIDENCE_UNAVAILABLE');}
   }
+  #scope(order){
+    if(order?.network!==NETWORK||order?.asset!==TOKEN||order?.merchantAccount!==this.#account||
+      typeof order?.payTo!=='string'||!/^0x[0-9a-f]{40}$/.test(order.payTo)||/^0x0{40}$/.test(order.payTo))throw new PaymentError('SANDBOX_EVIDENCE_CONFIGURATION_REQUIRED');
+  }
+  async preflight(order){
+    this.#scope(order);
+    const [account,balance]=await Promise.all([this.#stripe('/account'),this.#stripe('/balance')]);
+    if(account?.object!=='account'||account.id!==this.#account||account.capabilities?.crypto_payments!=='active'||
+      balance?.object!=='balance'||balance.livemode!==false)throw new PaymentError('STRIPE_MERCHANT_PREFLIGHT_UNVERIFIED');
+    // Reviewed read schema: stripe/stripe-node@1a30a44ba612bd83dbfd331f5500389e59898f71
+    // src/resources/Crypto/DepositAddresses.ts; stripe/openapi@dfa6772d635abce5154c310ab35c9c820aa32eb0.
+    // This read is authenticated to the merchant. Never create an address or
+    // silently retry with another API version when private preview is unavailable.
+    const query=new URLSearchParams({network:'base',address:order.payTo,limit:'2'});
+    const list=await this.#stripe('/crypto/deposit_addresses?'+query.toString(),{method:'GET'},'2026-10-14.preview');
+    if(list?.object!=='list'||!Array.isArray(list.data)||list.data.length!==1||list.has_more!==false)throw new PaymentError('STRIPE_MERCHANT_PREFLIGHT_UNVERIFIED');
+    const address=list.data[0],tokens=address?.supported_tokens;
+    if(address?.object!=='crypto.deposit_address'||!sameAddress(address.address,order.payTo)||address.livemode!==false||address.network!=='base'||
+      address.customer!=null||address.customer_account!=null||!Array.isArray(tokens)||tokens.length!==1||
+      !tokens[0]||Object.keys(tokens[0]).sort().join('|')!=='token_contract_address|token_currency'||
+      tokens[0].token_currency!=='usdc'||!sameAddress(tokens[0].token_contract_address,TOKEN))throw new PaymentError('STRIPE_MERCHANT_PREFLIGHT_UNVERIFIED');
+    return {merchantVerified:true,testnetOnly:true,fundingAccepted:false,orderDigest:orderNonce(order)};
+  }
   async verify(order,transactionHash){
-    if(order.network!==NETWORK||order.asset!==TOKEN||order.merchantAccount!==this.#account)throw new PaymentError('SANDBOX_EVIDENCE_CONFIGURATION_REQUIRED');
+    this.#scope(order);
     let chain;
     try{
       if(await this.#client.getChainId()!==CHAIN_ID)throw new PaymentError('RPC_NETWORK_MISMATCH');

@@ -1,5 +1,63 @@
 # Acceptance evidence
 
+## Current external gates — October 15
+
+| Gate | Evidence/status |
+| --- | --- |
+| Own-email login and first-use delegation lookup | Observed through the real SDK; lookup reports no active delegation. |
+| Protected CDP credentials | Owner security-key verification requested; no completed key/Wallet Secret download is yet confirmed. |
+| Provider policy, negative signing tests and bounded account delegation | Not yet accepted for this new signer. |
+| Public test facilitator and Base Sepolia RPC | Read-only supported-network, SDK initialization and finalized-block checks passed; no verify/settle call. |
+| Authenticated Stripe merchant/deposit preflight | Implemented and fixture-tested; actual account, preview access and address/token match not yet accepted. |
+| New provider-signed test-USDC payment and independent Stripe evidence | Not yet run. |
+| Native clients | Codex has isolated synthetic tool-use evidence; no native provider-payment or universal-client acceptance. |
+| Mainnet/funding | Disabled and not accepted; no deposit instructions. |
+
+## Before-sign merchant binding — October 15, NOT actual payment acceptance
+
+- Found a real missing integration boundary: the previous verifier checked
+  Stripe identity only after a chain transfer. An arbitrary configured payee
+  could match the chain logs without being a Stripe merchant deposit address.
+  Every new broker payment now requires a fresh, mandatory GET-only preflight
+  of the expected merchant, sandbox balance, active crypto capability and one
+  unscoped sandbox Base deposit address supporting the exact test USDC contract.
+- Its strict own-data attestation has four fields and binds the frozen order
+  digest. Missing/false/extra/stale attestations cannot reach signing. Provider
+  EVM response casing is accepted only after exact 40-hex validation and equality
+  of the same 20 address bytes; canonical order data/digest are never changed.
+- The pure reads occur before allocation. Failure creates no order/reservation
+  and signs/settles nothing; no automatic retry occurs. The original atomic
+  reservation rechecks expiry/revocation/quote uniqueness/shared budget after the
+  await. Existing unknown outcomes keep their full hold, and reconciliation does
+  not require another new-spending preflight or call a signer/facilitator.
+- New deposit-list GET explicitly uses `2026-10-14.preview`; existing Stripe
+  account/balance/PaymentIntent calls retain `2026-05-27.preview`. An unsupported
+  preview returns failure without automatic version fallback. Its public
+  contract was checked against the pinned [Stripe preview SDK](https://github.com/stripe/stripe-node/blob/1a30a44ba612bd83dbfd331f5500389e59898f71/src/resources/Crypto/DepositAddresses.ts)
+  and [preview OpenAPI](https://github.com/stripe/openapi/blob/dfa6772d635abce5154c310ab35c9c820aa32eb0/openapi/spec3.private_preview.sdk.json).
+  This is contract evidence, not actual private-preview/account eligibility.
+- Separately, actual public `GET /supported` returned HTTP 200 with exact v2
+  Base Sepolia support, the official x402 resource server initialized against
+  that public facilitator, and a public Base Sepolia RPC returned the expected
+  chain ID and a finalized block. No payment verify, signature, settlement,
+  faucet, private Stripe request or production write was made by these checks.
+- Root full checks pass **162/162** on Node 26.7.0 and Node 24.13.0. Independent
+  API/wire review reran the 38 focused tests on Node 24. These fixture results
+  do not establish current merchant ownership, provider policy acceptance or a
+  new transfer. Those external gates remain above. **Do not fund a wallet.**
+- A separate frontier-model code reviewer found no concrete blocking bypass,
+  budget race or diagnostic leak in the frozen patch; 35 focused tests passed
+  independently on both Node versions, plus synthetic suspended-preflight budget
+  exhaustion and signer-failure/full-hold probes. Email-page typecheck, 44 tests
+  and production build also pass. This is scoped review, not certification.
+- Reran the actual Codex CLI 0.159.2 against the updated disposable fixture.
+  Readiness-only used one read tool, allocated zero and made no pay/sign/settle
+  call. The separate complete native run used readiness, pay, status and
+  reconcile exactly once, with one synthetic signature/settlement, one evidence
+  verification and 5,000,000 synthetic units allocated. The new merchant
+  preflight was synthetic too; provider calls were zero and provider/mainnet/
+  funding acceptance remained false. No other native client result is inferred.
+
 ## Actual first-use delegation lookup and safe credential import — October 15
 
 - The real SDK's GET returned the documented account-scoped absence sentence

@@ -17,7 +17,8 @@ test('actual broker + separate merchant ledgers + official resource server compo
     settle:async()=>{settles++;return {success:true,payer:f.grant.wallet,network:NETWORK,transaction:'0x'+'aa'.repeat(32)};}};
   const merchant=await createTestnetMerchant({store:merchantStore,facilitator});
   const signer={sign:order=>f.signer.signTypedData(paymentTypedData(order,f.grant))};
-  const verifier={verify:async order=>({orderId:order.id,nonce:orderNonce(order),amountAtomic:order.amountAtomic,network:NETWORK,transactionHash:'0x'+'aa'.repeat(32),paymentIntentId:'pi_isolated'})};
+  const verifier={preflight:async order=>({merchantVerified:true,testnetOnly:true,fundingAccepted:false,orderDigest:orderNonce(order)}),
+    verify:async order=>({orderId:order.id,nonce:orderNonce(order),amountAtomic:order.amountAtomic,network:NETWORK,transactionHash:'0x'+'aa'.repeat(32),paymentIntentId:'pi_isolated'})};
   const broker=new TestnetBroker({store:payerStore,signer,merchant,verifier});
   assert.equal((await broker.pay(f.order)).state,'confirmed');assert.equal(settles,1);
   assert.equal(payerStore.get(f.order.id).state,'confirmed');assert.equal(merchantStore.get(f.order.id).state,'settled');
