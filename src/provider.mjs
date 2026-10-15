@@ -3,6 +3,11 @@ import {promisify} from 'node:util';
 import {readFileSync, realpathSync} from 'node:fs';
 import {isAbsolute, dirname, resolve} from 'node:path';
 const execute = promisify(execFile);
+const READ_COMMANDS = [
+  ['status'],
+  ['address', '--chain', 'base'],
+  ['balance', '--chain', 'base', '--asset', 'usdc'],
+];
 
 export class WalletError extends Error {
   constructor(code) { super(code); this.code = code; }
@@ -17,11 +22,18 @@ export class AwalProvider {
     if (metadata.name !== 'awal' || metadata.version !== '2.12.2') throw new WalletError('AWAL_VERSION_UNVERIFIED');
     this.execute = executor;
   }
-  async run(args, timeout = 30000) {
+  async run(args) {
+    const command = Array.isArray(args) && READ_COMMANDS.find(candidate =>
+      candidate.length === args.length && candidate.every((value, index) => value === args[index]));
+    if (!command) {
+      throw new WalletError('READ_ONLY_COMMAND_REQUIRED');
+    }
+    // Never iterate or re-read caller-controlled input after validation.
+    const safeArgs = [...command];
     let output;
     try {
-      output = await this.execute(process.execPath, [this.cliPath, ...args, '--json'], {
-        timeout, maxBuffer: 1024 * 1024, windowsHide: true,
+      output = await this.execute(process.execPath, [this.cliPath, ...safeArgs, '--json'], {
+        timeout: 30000, maxBuffer: 1024 * 1024, windowsHide: true,
         env: {PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, NO_COLOR: '1'},
       });
     } catch { throw new WalletError('PROVIDER_OUTCOME_UNCONFIRMED'); }
@@ -45,10 +57,5 @@ export class AwalProvider {
     const raw = value.balances?.USDC?.raw;
     if (typeof raw !== 'string' || !/^(0|[1-9][0-9]{0,30})$/.test(raw)) throw new WalletError('BALANCE_UNVERIFIED');
     return {network: 'base', asset: 'USDC', amountAtomic: raw};
-  }
-  async pay(request) {
-    const args = ['x402', 'pay', request.url, '--method', request.method, '--scheme', 'exact', '--max-amount', request.amountAtomic, '--correlation-id', request.id];
-    if (request.body !== undefined) args.push('--data', JSON.stringify(request.body));
-    return this.run(args, 200000);
   }
 }

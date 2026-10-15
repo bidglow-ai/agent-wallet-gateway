@@ -8,5 +8,10 @@ try {
   await client.connect(transport);
   const tools=await client.listTools();
   const result=await client.callTool({name:'wallet_status',arguments:{}});
-  console.log(JSON.stringify({transport:'real-stdio-child-process',tools:tools.tools.map(x=>x.name),status:JSON.parse(result.content[0].text),nativeClientAccepted:false,realPaymentAttempted:false},null,2));
+  const readiness=await client.callTool({name:'wallet_readiness',arguments:{}});
+  if (result.isError || readiness.isError) throw new Error('READ_ONLY_PROBE_FAILED');
+  const status=JSON.parse(result.content[0].text), release=JSON.parse(readiness.content[0].text);
+  if (status.paymentsEnabled !== false || release.paymentsEnabled !== false || release.fundingForAutomatedPaymentsAccepted !== false) throw new Error('PAYMENT_BLOCK_UNVERIFIED');
+  if (tools.tools.some(x=>/pay|send|sign|trade|auth/.test(x.name))) throw new Error('UNEXPECTED_TOOL');
+  console.log(JSON.stringify({transport:'real-stdio-child-process',tools:tools.tools.map(x=>x.name),status,readiness:release,nativeClientAccepted:false,realPaymentAttempted:false},null,2));
 } finally {await client.close();}

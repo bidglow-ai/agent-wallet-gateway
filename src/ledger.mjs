@@ -72,7 +72,18 @@ export class BudgetLedger {
     for (const suffix of ['', '-wal', '-shm', '-journal']) if (pathExists(path + suffix)) securePath(path + suffix, false);
     this.db = new DatabaseSync(path);
     try {
-      this.db.exec('PRAGMA busy_timeout=10000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
+      this.db.exec('PRAGMA busy_timeout=10000;');
+      // Simultaneous first open can return SQLITE_BUSY while changing journal
+      // mode despite busy_timeout. Retry only this idempotent setup statement,
+      // never a reservation, confirmation, or external payment.
+      for (let attempt = 0; ; attempt++) {
+        try { this.db.exec('PRAGMA journal_mode=WAL;'); break; }
+        catch (error) {
+          if (error.errcode !== 5 || attempt >= 4) throw error;
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+        }
+      }
+      this.db.exec('PRAGMA synchronous=FULL;');
       this.db.exec(`CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS payments (
           id TEXT PRIMARY KEY, request TEXT NOT NULL, request_hash TEXT NOT NULL UNIQUE, amount INTEGER NOT NULL CHECK(amount > 0 AND amount <= 5000000),

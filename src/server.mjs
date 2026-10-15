@@ -21,6 +21,7 @@ export function createWalletServer(gateway) {
   };
   const readOnly = {readOnlyHint: true, destructiveHint: false};
   server.registerTool('wallet_status', {description: 'Read wallet authentication and shared gateway budget. Does not log in, fund or pay.', inputSchema: {}, annotations: readOnly}, safe(() => gateway.status()));
+  server.registerTool('wallet_readiness', {description: 'Read payment release blockers. Authentication, a public address and funding do not enable payments.', inputSchema: {}, annotations: readOnly}, safe(() => gateway.readiness()));
   server.registerTool('wallet_address', {description: 'Read this shared wallet public Base EVM address. No credentials.', inputSchema: {}, annotations: readOnly}, safe(async () => ({network: 'base', address: await gateway.provider.address()})));
   server.registerTool('wallet_balance', {description: 'Read USDC balance on Base. Does not transfer or trade.', inputSchema: {}, annotations: readOnly}, safe(() => gateway.provider.balance()));
   server.registerTool('wallet_operation', {description: 'Inspect a saved operation UUID and budget state without retrying or paying. Pending/unknown requires operator reconciliation.', inputSchema: {id: z.string().uuid()}, annotations: readOnly}, safe(({id}) => {

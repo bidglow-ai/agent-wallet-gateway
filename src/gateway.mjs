@@ -5,36 +5,21 @@ export class WalletGateway {
     this.provider = provider; this.ledger = ledger; this.policy = policy;
   }
   async status() {
-    return {...await this.provider.status(), paymentsEnabled: this.policy?.enabled === true,
+    return {...await this.provider.status(), paymentsEnabled: false,
       budget: this.ledger?.summary() ?? null,
       policyScope: 'gateway_calls_only_not_all_processes_on_this_computer',
       fulfillmentVerified: false};
   }
-  async pay(input) {
-    if (!this.ledger || this.policy?.enabled !== true) throw new WalletError('PAYMENTS_DISABLED');
-    if (!/^0x[0-9a-fA-F]{40}$/.test(this.policy.expectedWallet ?? '')) throw new WalletError('WALLET_PIN_REQUIRED');
-    const status = await this.provider.status();
-    if (!status.authenticated) throw new WalletError('WALLET_LOGIN_REQUIRED');
-    const address = await this.provider.address();
-    if (address !== this.policy.expectedWallet.toLowerCase()) throw new WalletError('WALLET_CHANGED');
-    // Caller saves this operation UUID before invoking. Inspect existing operations
-    // instead of blindly repeating them. New UUIDs cannot bypass payload dedup.
-    const request = {...input};
-    this.ledger.reserve(request);
-    try {
-      const result = await this.provider.pay(request);
-      const reported = result.amountPaid;
-      // Provider claims are not independent chain or merchant fulfillment evidence.
-      // Commit the FULL reserved ceiling, never release budget on provider reports.
-      if (result.paymentMade !== true || !Number.isSafeInteger(reported) || reported < 1 || BigInt(reported) > BigInt(request.amountAtomic)) throw new WalletError('PAYMENT_RECONCILIATION_REQUIRED');
-      this.ledger.confirm(request.id, request.amountAtomic);
-      return {id: request.id, outcome: 'provider_reported_paid', reportedAmountAtomic: String(reported),
-        budgetConsumedAtomic: request.amountAtomic, chainSettlementIndependentlyVerified: false,
-        merchantFulfillmentVerified: false, automaticRetryAllowed: false};
-    } catch {
-      this.ledger.markUnknown(request.id);
-      return {id: request.id, outcome: 'unknown', budgetReservedAtomic: request.amountAtomic,
-        automaticRetryAllowed: false, operatorReconciliationRequired: true};
-    }
+  readiness() {
+    return {paymentsEnabled: false, fundingForAutomatedPaymentsAccepted: false,
+      liveSignerConfigured: false, sharedGatewayBudgetIsWalletWide: false,
+      blockers: ['SIGNER_CHAIN_TOKEN_PAYEE_BINDING', 'MERCHANT_FROZEN_ORDER_AND_IDEMPOTENCY',
+        'INDEPENDENT_SETTLEMENT_AND_RECONCILIATION', 'MERCHANT_ACCOUNTING_AND_RECOVERY',
+        'NATIVE_CLIENT_PAYMENT_ACCEPTANCE'],
+      instruction: 'Do not fund for automated payments; authentication or balance does not establish payment readiness.'};
+  }
+  async pay() {
+    // Also reject direct library calls, before any provider or ledger access.
+    throw new WalletError('PAYMENT_RELEASE_NOT_ACCEPTED');
   }
 }

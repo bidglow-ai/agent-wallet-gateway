@@ -14,9 +14,29 @@ function provider(t, executor, version='2.12.2') {
 test('version mismatch rejects provider before launching',t=>{
   assert.throws(()=>provider(t,()=>assert.fail(), '0.0.0'),/AWAL_VERSION_UNVERIFIED/);
 });
+test('raw command runner rejects every non-allowlisted command before execution',async t=>{
+  const p=provider(t,()=>assert.fail('unsafe command must not execute'));
+  for (const args of [null, [], ['x402','pay','https://merchant.example'], ['send'], ['auth','login'], ['trade'], ['sign'], ['status','--help'], ['address','--chain','polygon'], ['balance','--chain','base','--asset','usdc','--extra'], ['status; echo unsafe']]) {
+    await assert.rejects(()=>p.run(args),/READ_ONLY_COMMAND_REQUIRED/);
+  }
+  assert.equal(p.pay,undefined);
+});
 test('status strips account email and provider extras',async t=>{
   const p=provider(t,async()=>({stdout:JSON.stringify({server:{running:true},auth:{authenticated:false,email:'private@example.invalid'},secret:'redact'})}));
   assert.deepEqual(await p.status(),{running:true,authenticated:false});
+});
+test('caller iterators and changing accessors cannot alter validated command',async t=>{
+  const calls=[];
+  const p=provider(t,async(...args)=>{calls.push(args);return{stdout:'{}'};});
+  const altered=['status'];
+  altered[Symbol.iterator]=function*(){yield 'send';yield '--help';};
+  await p.run(altered);
+  let reads=0;
+  const changing=[];
+  Object.defineProperty(changing,'0',{get(){return ++reads===1?'status':'send';}});
+  await p.run(changing);
+  assert.equal(calls.length,2);
+  for (const call of calls) assert.deepEqual(call[1].slice(1),['status','--json']);
 });
 test('execFile passes exact arguments with no shell and bounded output',async t=>{
   const calls=[];const p=provider(t,async(...args)=>{calls.push(args);return{stdout:JSON.stringify({address:'0x1111111111111111111111111111111111111111'})};});

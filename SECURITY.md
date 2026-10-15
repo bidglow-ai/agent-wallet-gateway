@@ -17,8 +17,10 @@ clean dependency audit or a reviewer report as a security certification.
 - Ledger tests isolate multiple processes on a local filesystem. They do not
   establish distributed/NFS locking, rollback-proof accounting against a local
   administrator, signer-enforced global budgets or remote provider guarantees.
-- The payment research class is unmounted and unsafe for live use until signer
-  network/token/recipient/order binding and wallet-rotation races are resolved.
+- The provider payment adapter has been removed. The gateway rejects even direct
+  payment calls before any provider/ledger access, and the provider runner accepts
+  only exact status, Base address and Base USDC balance commands. These safeguards
+  are not signer-side restrictions on other same-user programs or the vendor CLI.
 
 Keep runtime state owner-only and outside the repository. Never put private keys,
 wallet seeds, OTPs or receipts in issues. To report a suspected vulnerability,

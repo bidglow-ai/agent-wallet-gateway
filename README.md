@@ -5,8 +5,9 @@ clients, and an experimental durable shared-budget ledger. No seed phrase or
 private key is copied into an agent or this repository.
 
 **v0.1.0 is READ-ONLY. It does not create a wallet, sign, transfer, trade or pay.**
-Setting `enabled: true` is rejected. The unmounted payment research code is not
-production-ready. A successful protocol test is not native-client acceptance,
+Setting `enabled: true` is rejected. The former callable payment adapter has been
+removed; even direct gateway payment calls reject before accessing the provider
+or ledger. A successful protocol test is not native-client acceptance,
 wallet authentication, mainnet payment or merchant fulfillment.
 
 ## Why this exists
@@ -54,6 +55,7 @@ Requires Node 24+ with `node:sqlite`. Use a patched supported Node release.
 | Tool | Effect |
 | --- | --- |
 | `wallet_status` | Read running/authenticated state; no email or credentials |
+| `wallet_readiness` | Read explicit automated-payment blockers; funding is not accepted |
 | `wallet_address` | Read the current public Base EVM address |
 | `wallet_balance` | Read Base USDC balance in integer atomic units |
 | `wallet_operation` | Inspect a saved local research operation without replay |
@@ -83,9 +85,9 @@ The ledger uses integer USDC units (1 USDC = 1,000,000), SQLite WAL/FULL and
 cannot allocate more than the persisted policy. Tests cap a call at 5 USDC and a
 grant at 10 USDC. Restarting or changing policy cannot reset that ledger.
 
-An operation is reserved **before** invoking a payer. Crashes, uncertain provider
+In isolated ledger research, an operation is reserved **before** a hypothetical payer. Crashes, uncertain provider
 results or timeouts retain the full reservation and never trigger automatic
-repayment. Provider-reported success consumes the full ceiling conservatively;
+repayment. Ledger confirmation consumes a trusted amount conservatively;
 it does not prove chain settlement or merchant fulfillment. Canonical request
 deduplication blocks the same request under a new UUID, not all semantically
 equivalent merchant orders. A merchant still needs durable business idempotency.
@@ -109,6 +111,15 @@ limits and revocation, independent settlement evidence, unknown-outcome
 reconciliation, and native-client end-to-end acceptance. BidGlow additionally
 needs its own production order/ranking/recovery integration. Installing this bridge
 does not make BidGlow unattended payments available.
+
+The provider runner accepts only three exact read commands; it cannot forward
+arbitrary CLI arguments. This does not restrict other programs under the same OS
+user from invoking the separately installed wallet CLI directly.
+
+For ordinary customer payments, Stripe's wallet-confirmed USDC checkout is a
+separate path: the customer uses their existing supported wallet and approves the
+payment. It does not require funding this experimental Agent wallet, and it is
+not an unattended payment mandate.
 
 ## Tests and privacy
 

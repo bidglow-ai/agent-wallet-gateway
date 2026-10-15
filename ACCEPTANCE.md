@@ -1,6 +1,29 @@
-# Acceptance evidence — October 14, 2026
+# Acceptance evidence
 
-## Current release: experimental, read-only
+## October 15 hardening
+
+- Removed the provider payment adapter and blocked direct gateway payment calls
+  before all provider/ledger access, including when a caller passes `enabled:true`.
+- Provider command forwarding is limited to three exact read-only commands.
+- Added `wallet_readiness` to report automated-payment release blockers. It never
+  treats a successful login, wallet address or balance as funding acceptance.
+- Owner-authorized official authentication and three separate real stdio MCP
+  address reads were observed locally. Account details, wallet address and balance
+  are deliberately omitted here. These were SDK processes, not native vendor model
+  payment acceptance. No payment, signing or transfer was performed.
+- Native-client restrictions and the locally modified runtime caveat below remain.
+- All 32 isolated tests pass on Node 26.7.0 and 24.13.0 after hardening; bridge
+  dependency audit reports zero advisories. A fresh real-stdio probe reports an
+  authenticated wallet, five read-only tools and funding/payment acceptance false.
+  No live transaction was attempted. These checks are not a security certification.
+- Independent scoped application-security review accepted the read-only hardening
+  after the caller-iterator bypass was fixed and regression-tested. Ten repeated
+  eight-process cold-start ledger tests passed after a bounded SQLITE_BUSY retry
+  was added only around journal-mode setup; no payment operation is retried.
+
+## October 14 baseline (historical, before owner authentication)
+
+### Historical release: experimental, read-only
 
 - 31 isolated tests pass on local Node 26.7.0 and Node 24.13.0. No real wallet,
   token, private key, merchant purchase or customer record is used in tests.
@@ -16,7 +39,7 @@
   security review were performed. They required blocking the live payment tool;
   the release implements that block. No whole-system bug-free claim is made.
 
-## Client evidence, without inflated claims
+### Historical client evidence, without inflated claims
 
 | Client | Local configuration | Actual observed evidence | Not accepted |
 | --- | --- | --- | --- |
@@ -32,7 +55,7 @@ wallet-address comparison from the native clients still requires owner login and
 each client's ordinary trust/tool permissions. A configured server is not proof
 that an AI model has discovered it or successfully used it.
 
-## Official runtime repair
+### Historical official runtime repair
 
 The official MCP installer's runtime archive returns HTTP 404; no unofficial or
 guessed replacement archive was used. The separate official `awal` npm package
@@ -54,13 +77,13 @@ real-stdio IPC checks passed with the service still unauthenticated. This is a
 **locally modified major-version runtime**: login, signing, payment and full UI
 compatibility are not accepted. No forced audit fix or security downgrade was used.
 
-The repaired CLI reports its service running and unauthenticated. Official
+At the October 14 check, the repaired CLI reported its service running and unauthenticated. Official
 `awal show` reports opening its wallet window, but the native UI automation
 surface could not bind that app; the login screen was not visually verified.
 No wallet was created, no email OTP or provider agreement submitted, and no funds
 were transferred. Do not mistake this operational state for an accepted payer.
 
-## Payment blockers
+## Payment blockers (still current)
 
 - Inspected CLI pay parameters do not bind Base USDC/payee at the signing boundary.
 - Wallet preflight and signing are not atomic; provider redirects/DNS and EIP-3009
