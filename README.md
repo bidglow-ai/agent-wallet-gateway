@@ -27,6 +27,10 @@ multi-tenant service, accepted provider flow or funded-wallet release.
 No actual email/delegation-provider acceptance is claimed by mocked tests or
 its successful build. It has separately documented dependency advisories.
 
+An opt-in [native Codex synthetic probe](NATIVE_CLIENT_TESTING.md) separately
+checks actual model tool calls against a disposable unfunded fixture. Native
+synthetic tool use is not provider-signed payment or permission to fund a wallet.
+
 These are development modules, **not a completed autonomous payment product**.
 Do not fund a wallet to test them. The owner still needs a separate development
 CDP project, its normal login/configuration, private broker credentials, a

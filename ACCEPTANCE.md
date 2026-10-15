@@ -1,5 +1,52 @@
 # Acceptance evidence
 
+## Native Codex synthetic milestone — October 15, NOT a funding release
+
+- Root syntax checks and **132/132 isolated tests** pass on Node 26.7.0 and
+  Node 24.13.0. Normal checks launch no native model or real payment provider.
+- Email-example typecheck, **27/27 tests** and Vite 8.0.16 production build
+  were rerun successfully. Root production dependency audit reports zero;
+  email-example production dependency audit still reports **five moderate**
+  SDK-transitive package entries. No forced breaking downgrade or advisory
+  suppression was used. Those dependency gates remain unresolved.
+- An actual **Codex CLI 0.159.2 model session**, using the existing ChatGPT
+  authentication route and temporary MCP configuration, completed a
+  readiness-only run. The only accepted completed tool was readiness; the
+  independent fixture ledger remained unreserved with zero allocation and
+  zero pay/sign/settle calls.
+- A separate actual native model session then completed, in order, readiness,
+  one pay, status and reconcile through `src/unattended/client.mjs`. Completed
+  native MCP events matched one frozen synthetic order. Independent local
+  service counters observed exactly one pay/inspect/reconcile/sign/settle,
+  one evidence verification and 5,000,000 atomic units allocated from a
+  10,000,000 synthetic allowance. No repeated owner prompt was needed inside
+  this narrowly pre-authorized synthetic run.
+- **The signer was a disposable unfunded in-memory key, settlement and receipt
+  adapters were synthetic, and provider calls were zero.** Both actual native
+  runs explicitly returned provider/mainnet/funding acceptance false. No CDP
+  login, delegation, provider policy, blockchain transfer, Stripe write,
+  BidGlow deployment or production ranking was performed by these runs.
+- Earlier native attempts produced client errors and no MCP calls. They did
+  not pass and are not counted as executed payments. The native tool bridge
+  configuration was corrected without changing models or weakening the MCP
+  event/order/result validator; unknown tool execution still rejects a run.
+- Independent scoped review reproduced and led to fixes for unbounded
+  synchronous startup preflights and diagnostic metadata leakage. Regression
+  tests cover bounded process-group termination, split-stream authentication
+  classification and fixed-enumeration diagnostics. This is not whole-process
+  containment: official Code Mode/MCP helpers use separate process groups,
+  relying on normal shutdown/protocol EOF. Forced termination cannot prove
+  complete helper cleanup; hostile replacement binaries are unsupported.
+- This is **native Codex synthetic tool-use acceptance only**, not real
+  payment acceptance and not Claude/Gemini/Cursor/Cline native acceptance.
+  See [reproducible native probe and limitations](NATIVE_CLIENT_TESTING.md).
+
+Remaining: actual owner-authorized development CDP configuration, verified
+email/delegation and provider-negative tests, a new provider-signed test-USDC
+transfer with independent chain/Stripe evidence, other native clients,
+unresolved browser-SDK advisories and separately reviewed production
+integration. Default `npm start` stays read-only. **Do not fund a wallet.**
+
 ## Own-email enrollment milestone — October 15, NOT a funding release
 
 - Root syntax checks and **116/116 isolated tests** pass on Node 26.7.0 and
