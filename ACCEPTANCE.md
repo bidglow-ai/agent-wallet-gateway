@@ -5,13 +5,42 @@
 | Gate | Evidence/status |
 | --- | --- |
 | Own-email login and first-use delegation lookup | Observed through the real SDK; lookup reports no active delegation. |
-| Protected CDP credentials | Owner security-key verification requested; no completed key/Wallet Secret download is yet confirmed. |
+| Protected CDP credentials and backend read authentication | Owner verification completed; API key and separate Wallet Secret downloaded/imported into protected local files. Actual policy/end-user GETs passed on Node 24.13.0 and 26.7.0 with explicit IPv4 process flags; signing privileges are not established by these reads. |
 | Provider policy, negative signing tests and bounded account delegation | Not yet accepted for this new signer. |
 | Public test facilitator and Base Sepolia RPC | Read-only supported-network, SDK initialization and finalized-block checks passed; no verify/settle call. |
 | Authenticated Stripe merchant/deposit preflight | Implemented and fixture-tested; actual account, preview access and address/token match not yet accepted. |
 | New provider-signed test-USDC payment and independent Stripe evidence | Not yet run. |
 | Native clients | Codex has isolated synthetic tool-use evidence; no native provider-payment or universal-client acceptance. |
 | Mainnet/funding | Disabled and not accepted; no deposit instructions. |
+
+## Actual protected credential import and backend authentication — October 15
+
+- After owner security-key verification, downloaded the runtime API key and
+  separate Wallet Secret into an owner-only repository-external directory.
+  Files are regular, owner-only (0600), single-link, with a 0700 direct parent.
+  The offline importer accepted the actual `id/privateKey` export and created
+  the protected normalized bundle. No credential value was published or placed
+  in command arguments, frontend code, MCP configuration or Git.
+- The runtime key retains the isolated project, one trusted IPv4 restriction,
+  and disabled consumer Coinbase App permissions, wallet Export and policy
+  Manage. No extra permission was granted to resolve authentication errors.
+- Actual SDK reads initially returned HTTP 401. A controlled read-only comparison
+  established that the default CDP connection used IPv6 while the key allowed
+  IPv4 only; the same credentials succeeded over IPv4. Fresh official-SDK
+  processes with `--dns-result-order=ipv4first` and
+  `--no-network-family-autoselection` then successfully read policies and end
+  users on Node 24.13.0 and 26.7.0. Both reported zero project policies and one
+  end user, without pagination. No SDK/global network patch was applied.
+- Independent launch-path review confirmed those opt-in flags reach the SDK in
+  the same process. They also affect its other Node connections and do not
+  guarantee a stable IP, proxy behavior or IPv6 fallback. Other authentication
+  failures must not automatically be attributed to this observed cause.
+
+These are real credential/read-authentication milestones, not provider-policy,
+delegation or payment acceptance. No signature, transfer, faucet, private Stripe
+request, production write or funding instruction occurred in these checks.
+The current external gates above remain authoritative; earlier dated entries
+below record the state at their respective milestones. **Do not fund a wallet.**
 
 ## Before-sign merchant binding — October 15, NOT actual payment acceptance
 

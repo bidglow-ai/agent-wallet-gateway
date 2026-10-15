@@ -126,6 +126,35 @@ explicit operator assertion, not an API proof that a project is safe.
 AGENT_TESTNET_DEVELOPMENT=I_UNDERSTAND_NO_REAL_FUNDS AGENT_OPERATOR_CONFIG=/absolute/private/operator.json node src/unattended/operator.mjs
 ```
 
+### Backend IP allowlist and dual-stack hosts
+
+An IPv4-only API-key allowlist must match the backend's actual CDP connection,
+not just an IP-check website. On the inspected dual-stack host, that website
+reported the allowlisted IPv4 while the SDK connected to CDP over IPv6 and
+received HTTP 401. With the same key and unchanged permissions, fresh processes
+using both flags below successfully read project policies and end users on
+Node 24.13.0 and 26.7.0:
+
+```sh
+AGENT_TESTNET_DEVELOPMENT=I_UNDERSTAND_NO_REAL_FUNDS AGENT_OPERATOR_CONFIG=/absolute/private/operator.json node --dns-result-order=ipv4first --no-network-family-autoselection src/unattended/operator.mjs
+```
+
+Use this opt-in mode only after establishing an egress/allowlist mismatch; a 401
+alone does not establish its cause. The flags affect this entire Node process,
+including its Stripe/RPC connections, not the browser or other processes. They
+do not provide IPv6 fallback when IPv4 is unavailable, guarantee proxy/custom
+lookup behavior, or keep a changing public IPv4 allowlisted. Maintain the exact
+trusted backend IP restriction separately. Do not remove the allowlist, expand
+consumer/wallet permissions, patch the SDK/Axios, or set global `NODE_OPTIONS`
+to work around an unexplained authentication failure. See Node's official
+[DNS order](https://nodejs.org/api/cli.html#--dns-result-orderorder) and
+[network-family option](https://nodejs.org/api/cli.html#--no-network-family-autoselection).
+
+Successful process startup alone does not authenticate with CDP. Independently
+verify safe, read-only provider calls without printing raw credentials or
+diagnostics. Read success does not prove delegation, signing, policy enforcement,
+merchant eligibility or payment acceptance.
+
 Startup prints only the local enrollment URL and `fundingAccepted:false`. It does
 not send an OTP, grant delegation, apply a policy, request funds, sign or pay.
 The server binds only `127.0.0.1`. Keep it local: no reverse proxy, tunnel,
